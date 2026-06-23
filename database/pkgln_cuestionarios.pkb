@@ -1,0 +1,1400 @@
+CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
+
+  /* Helper to escape double quotes and backslashes in JSON strings */
+  FUNCTION f_escape_json(p_str IN VARCHAR2) RETURN VARCHAR2 IS
+    v_res VARCHAR2(32767);
+  BEGIN
+    IF p_str IS NULL THEN
+      RETURN '';
+    END IF;
+    v_res := REPLACE(p_str, '\', '\\');
+    v_res := REPLACE(v_res, '"', '\"');
+    v_res := REPLACE(v_res, CHR(10), '\n');
+    v_res := REPLACE(v_res, CHR(13), '\r');
+    v_res := REPLACE(v_res, CHR(9), '\t');
+    RETURN v_res;
+  END f_escape_json;
+
+  /* Helper to read CLOB content */
+  FUNCTION f_clob_to_str(p_clob IN CLOB) RETURN VARCHAR2 IS
+  BEGIN
+    IF p_clob IS NULL THEN
+      RETURN '';
+    END IF;
+    RETURN DBMS_LOB.SUBSTR(p_clob, 4000, 1);
+  END f_clob_to_str;
+
+  -- 1. List all questionnaires and summary statistics
+  PROCEDURE sp_obtener_cuestionarios(
+    p_input   IN  CLOB,
+    p_output  OUT CLOB,
+    p_success OUT NUMBER
+  ) AS
+    v_clob CLOB;
+    v_primero BOOLEAN := TRUE;
+    v_total_respuestas NUMBER;
+    v_completadas NUMBER;
+    v_tasa_finalizacion NUMBER;
+  BEGIN
+    p_success := 1;
+    DBMS_LOB.CREATETEMPORARY(v_clob, TRUE);
+    DBMS_LOB.APPEND(v_clob, '{"success":true,"data":[');
+
+    FOR r IN (
+      SELECT c.id, c.nombre, c.descripcion, c.version, c.publicado, c.fecha_creacion, c.fecha_publicacion, c.estado
+      FROM tkr_cuestionarios c
+      WHERE c.estado = 1
+      ORDER BY c.fecha_creacion DESC
+    ) LOOP
+      IF NOT v_primero THEN
+        DBMS_LOB.APPEND(v_clob, ',');
+      END IF;
+      v_primero := FALSE;
+
+      -- Calculate statistics for this questionnaire
+      SELECT COUNT(*), COUNT(CASE WHEN estado = 1 THEN 1 END)
+      INTO v_total_respuestas, v_completadas
+      FROM tkr_cuestionario_respuesta
+      WHERE id_cuestionario = r.id;
+
+      IF v_total_respuestas > 0 THEN
+        v_tasa_finalizacion := ROUND((v_completadas / v_total_respuestas) * 100);
+      ELSE
+        v_tasa_finalizacion := 0;
+      END IF;
+
+      DBMS_LOB.APPEND(v_clob, '{"id":' || r.id || 
+        ',"nombre":"' || f_escape_json(r.nombre) || '"' ||
+        ',"descripcion":"' || f_escape_json(f_clob_to_str(r.descripcion)) || '"' ||
+        ',"version":' || NVL(r.version, 1) ||
+        ',"publicado":' || NVL(r.publicado, 0) ||
+        ',"fecha_creacion":"' || TO_CHAR(r.fecha_creacion, 'YYYY-MM-DD"T"HH24:MI:SS') || '"' ||
+        ',"fecha_publicacion":' || CASE WHEN r.fecha_publicacion IS NOT NULL THEN '"' || TO_CHAR(r.fecha_publicacion, 'YYYY-MM-DD"T"HH24:MI:SS') || '"' ELSE 'null' END ||
+        ',"total_respuestas":' || v_total_respuestas ||
+        ',"completion_rate":' || v_tasa_finalizacion || '}');
+    END LOOP;
+
+    DBMS_LOB.APPEND(v_clob, ']}');
+    p_output := v_clob;
+  EXCEPTION
+    WHEN OTHERS THEN
+      p_success := 0;
+      p_output := '{"success":false,"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}';
+  END sp_obtener_cuestionarios;
+
+  -- 2. Get full definition of a single questionnaire
+  PROCEDURE sp_obtener_cuestionario_detalle(
+    p_input   IN  CLOB,
+    p_output  OUT CLOB,
+    p_success OUT NUMBER
+  ) AS
+    v_id_cuestionario NUMBER;
+    v_clob CLOB;
+    v_cuest_encontrado BOOLEAN := FALSE;
+    v_primer_sec BOOLEAN := TRUE;
+    v_primer_preg BOOLEAN := TRUE;
+    v_primer_op BOOLEAN := TRUE;
+    v_primer_assoc BOOLEAN := TRUE;
+    v_primer_flujo BOOLEAN := TRUE;
+    v_primer_regla BOOLEAN := TRUE;
+    v_primer_var BOOLEAN := TRUE;
+    v_primer_res BOOLEAN := TRUE;
+  BEGIN
+    p_success := 1;
+    v_id_cuestionario := JSON_VALUE(p_input, '$.id' RETURNING NUMBER);
+
+    IF v_id_cuestionario IS NULL THEN
+      p_success := 0;
+      p_output := '{"success":false,"error":"Falta el parámetro id"}';
+      RETURN;
+    END IF;
+
+    DBMS_LOB.CREATETEMPORARY(v_clob, TRUE);
+
+    -- Load Questionnaire Metadata
+    FOR c IN (
+      SELECT id, nombre, descripcion, version, publicado, fecha_creacion, fecha_publicacion, estado
+      FROM tkr_cuestionarios
+      WHERE id = v_id_cuestionario AND estado = 1
+    ) LOOP
+      v_cuest_encontrado := TRUE;
+      DBMS_LOB.APPEND(v_clob, '{"success":true,"data":{' ||
+        '"id":' || c.id ||
+        ',"nombre":"' || f_escape_json(c.nombre) || '"' ||
+        ',"descripcion":"' || f_escape_json(f_clob_to_str(c.descripcion)) || '"' ||
+        ',"version":' || NVL(c.version, 1) ||
+        ',"publicado":' || NVL(c.publicado, 0) ||
+        ',"fecha_creacion":"' || TO_CHAR(c.fecha_creacion, 'YYYY-MM-DD"T"HH24:MI:SS') || '"' ||
+        ',"fecha_publicacion":' || CASE WHEN c.fecha_publicacion IS NOT NULL THEN '"' || TO_CHAR(c.fecha_publicacion, 'YYYY-MM-DD"T"HH24:MI:SS') || '"' ELSE 'null' END ||
+        ',"secciones":[');
+
+      -- Sections Loop
+      FOR s IN (
+        SELECT id, nombre, descripcion, orden_visual
+        FROM tkr_secciones_cuestionario
+        WHERE id_cuestionario = c.id AND estado = 1
+        ORDER BY orden_visual
+      ) LOOP
+        IF NOT v_primer_sec THEN
+          DBMS_LOB.APPEND(v_clob, ',');
+        END IF;
+        v_primer_sec := FALSE;
+
+        DBMS_LOB.APPEND(v_clob, '{"id":' || s.id ||
+          ',"nombre":"' || f_escape_json(s.nombre) || '"' ||
+          ',"descripcion":"' || f_escape_json(s.descripcion) || '"' ||
+          ',"orden_visual":' || NVL(s.orden_visual, 0) ||
+          ',"preguntas":[');
+
+        v_primer_preg := TRUE;
+        -- Questions Loop
+        FOR p IN (
+          SELECT q.id, q.id_tipo_pregunta, t.codigo as tipo_codigo, q.codigo, q.texto_pregunta, q.orden_visual, q.obligatoria, q.valor_pregunta, q.permite_otro
+          FROM tkr_preguntas q, tkr_tipos_pregunta t
+          WHERE q.id_seccion_cuestionario = s.id AND q.id_tipo_pregunta = t.id AND q.estado = 1
+          ORDER BY q.orden_visual
+        ) LOOP
+          IF NOT v_primer_preg THEN
+            DBMS_LOB.APPEND(v_clob, ',');
+          END IF;
+          v_primer_preg := FALSE;
+
+          DBMS_LOB.APPEND(v_clob, '{"id":' || p.id ||
+            ',"id_tipo_pregunta":' || p.id_tipo_pregunta ||
+            ',"tipo_codigo":"' || p.tipo_codigo || '"' ||
+            ',"codigo":"' || f_escape_json(p.codigo) || '"' ||
+            ',"texto_pregunta":"' || f_escape_json(f_clob_to_str(p.texto_pregunta)) || '"' ||
+            ',"orden_visual":' || NVL(p.orden_visual, 0) ||
+            ',"obligatoria":' || NVL(p.obligatoria, 0) ||
+            ',"valor_pregunta":' || NVL(p.valor_pregunta, 0) ||
+            ',"permite_otro":' || NVL(p.permite_otro, 0) ||
+            ',"opciones":[');
+
+          v_primer_op := TRUE;
+          -- Options Loop (for single/multiple choice)
+          FOR o IN (
+            SELECT id, texto_opcion, codigo_opcion, orden_visual, valor_opcion
+            FROM tkr_opciones_pregunta
+            WHERE id_pregunta = p.id AND estado = 1
+            ORDER BY orden_visual
+          ) LOOP
+            IF NOT v_primer_op THEN
+              DBMS_LOB.APPEND(v_clob, ',');
+            END IF;
+            v_primer_op := FALSE;
+
+            DBMS_LOB.APPEND(v_clob, '{"id":' || o.id ||
+              ',"texto_opcion":"' || f_escape_json(o.texto_opcion) || '"' ||
+              ',"codigo_opcion":"' || f_escape_json(o.codigo_opcion) || '"' ||
+              ',"orden_visual":' || NVL(o.orden_visual, 0) ||
+              ',"valor_opcion":' || NVL(o.valor_opcion, 0) || '}');
+          END LOOP;
+
+          DBMS_LOB.APPEND(v_clob, '],"asociaciones":[');
+
+          v_primer_assoc := TRUE;
+          -- Associative items loop (for matching questions)
+          FOR a IN (
+            SELECT id, item_izquierdo, item_derecho, valor_correcto
+            FROM tkr_pregunta_asociativa
+            WHERE id_pregunta = p.id AND estado = 1
+          ) LOOP
+            IF NOT v_primer_assoc THEN
+              DBMS_LOB.APPEND(v_clob, ',');
+            END IF;
+            v_primer_assoc := FALSE;
+
+            DBMS_LOB.APPEND(v_clob, '{"id":' || a.id ||
+              ',"item_izquierdo":"' || f_escape_json(a.item_izquierdo) || '"' ||
+              ',"item_derecho":"' || f_escape_json(a.item_derecho) || '"' ||
+              ',"valor_correcto":' || NVL(a.valor_correcto, 0) || '}');
+          END LOOP;
+
+          DBMS_LOB.APPEND(v_clob, ']}');
+        END LOOP;
+
+        DBMS_LOB.APPEND(v_clob, ']}');
+      END LOOP;
+
+      DBMS_LOB.APPEND(v_clob, '],"flujos":[');
+
+      -- Questionnaire logical flows loop
+      FOR f IN (
+        SELECT fp.id, fp.id_pregunta_origen, qo.codigo as codigo_pregunta_origen, fp.id_opcion_respuesta, op.codigo_opcion as codigo_opcion_respuesta,
+               fp.id_operador, ope.codigo as operador_codigo, fp.valor_comparacion, fp.id_pregunta_destino, qd.codigo as codigo_pregunta_destino, fp.prioridad
+        FROM tkr_flujos_pregunta fp
+        JOIN tkr_preguntas qo ON fp.id_pregunta_origen = qo.id
+        LEFT JOIN tkr_opciones_pregunta op ON fp.id_opcion_respuesta = op.id
+        LEFT JOIN tkr_operadores ope ON fp.id_operador = ope.id
+        JOIN tkr_preguntas qd ON fp.id_pregunta_destino = qd.id
+        WHERE qo.id_cuestionario = c.id AND fp.estado = 1
+        ORDER BY fp.prioridad
+      ) LOOP
+        IF NOT v_primer_flujo THEN
+          DBMS_LOB.APPEND(v_clob, ',');
+        END IF;
+        v_primer_flujo := FALSE;
+
+        DBMS_LOB.APPEND(v_clob, '{"id":' || f.id ||
+          ',"id_pregunta_origen":' || f.id_pregunta_origen ||
+          ',"codigo_pregunta_origen":"' || f.codigo_pregunta_origen || '"' ||
+          ',"id_opcion_respuesta":' || NVL(TO_CHAR(f.id_opcion_respuesta), 'null') ||
+          ',"codigo_opcion_respuesta":' || CASE WHEN f.codigo_opcion_respuesta IS NOT NULL THEN '"' || f.codigo_opcion_respuesta || '"' ELSE 'null' END ||
+          ',"id_operador":' || NVL(TO_CHAR(f.id_operador), 'null') ||
+          ',"operador_codigo":' || CASE WHEN f.operador_codigo IS NOT NULL THEN '"' || f.operador_codigo || '"' ELSE 'null' END ||
+          ',"valor_comparacion":' || CASE WHEN f.valor_comparacion IS NOT NULL THEN '"' || f_escape_json(f.valor_comparacion) || '"' ELSE 'null' END ||
+          ',"id_pregunta_destino":' || f.id_pregunta_destino ||
+          ',"codigo_pregunta_destino":"' || f.codigo_pregunta_destino || '"' ||
+          ',"prioridad":' || NVL(f.prioridad, 0) ||
+          ',"reglas":[');
+
+        v_primer_regla := TRUE;
+        -- Rules for this logical flow
+        FOR r IN (
+          SELECT id, campo_evaluado, operador, valor_esperado, agrupador
+          FROM tkr_reglas_flujo
+          WHERE id_flujo_pregunta = f.id AND estado = 1
+        ) LOOP
+          IF NOT v_primer_regla THEN
+            DBMS_LOB.APPEND(v_clob, ',');
+          END IF;
+          v_primer_regla := FALSE;
+
+          DBMS_LOB.APPEND(v_clob, '{"id":' || r.id ||
+            ',"campo_evaluado":"' || f_escape_json(r.campo_evaluado) || '"' ||
+            ',"operador":"' || r.operador || '"' ||
+            ',"valor_esperado":"' || f_escape_json(r.valor_esperado) || '"' ||
+            ',"agrupador":"' || r.agrupador || '"}');
+        END LOOP;
+
+        DBMS_LOB.APPEND(v_clob, ']}');
+      END LOOP;
+
+      DBMS_LOB.APPEND(v_clob, '],"variables":[');
+
+      -- Calculated variables loop
+      FOR v IN (
+        SELECT id, codigo_variable, nombre_variable, tipo_variable, formula, orden_calculo, descripcion
+        FROM tkr_variables_calculadas
+        WHERE id_cuestionario = c.id AND estado = 1
+        ORDER BY orden_calculo
+      ) LOOP
+        IF NOT v_primer_var THEN
+          DBMS_LOB.APPEND(v_clob, ',');
+        END IF;
+        v_primer_var := FALSE;
+
+        DBMS_LOB.APPEND(v_clob, '{"id":' || v.id ||
+          ',"codigo_variable":"' || f_escape_json(v.codigo_variable) || '"' ||
+          ',"nombre_variable":"' || f_escape_json(v.nombre_variable) || '"' ||
+          ',"tipo_variable":"' || v.tipo_variable || '"' ||
+          ',"formula":"' || f_escape_json(f_clob_to_str(v.formula)) || '"' ||
+          ',"orden_calculo":' || NVL(v.orden_calculo, 0) ||
+          ',"descripcion":"' || f_escape_json(v.descripcion) || '"}');
+      END LOOP;
+
+      DBMS_LOB.APPEND(v_clob, '],"resultados":[');
+
+      -- Score range results loop
+      FOR r IN (
+        SELECT id, puntaje_desde, puntaje_hasta, nombre_resultado, descripcion, color
+        FROM tkr_resultados_cuestionario
+        WHERE id_cuestionario = c.id AND estado = 1
+        ORDER BY puntaje_desde
+      ) LOOP
+        IF NOT v_primer_res THEN
+          DBMS_LOB.APPEND(v_clob, ',');
+        END IF;
+        v_primer_res := FALSE;
+
+        DBMS_LOB.APPEND(v_clob, '{"id":' || r.id ||
+          ',"puntaje_desde":' || NVL(r.puntaje_desde, 0) ||
+          ',"puntaje_hasta":' || NVL(r.puntaje_hasta, 0) ||
+          ',"nombre_resultado":"' || f_escape_json(r.nombre_resultado) || '"' ||
+          ',"descripcion":"' || f_escape_json(f_clob_to_str(r.descripcion)) || '"' ||
+          ',"color":"' || f_escape_json(r.color) || '"}');
+      END LOOP;
+
+      DBMS_LOB.APPEND(v_clob, ']}');
+    END LOOP;
+
+    IF NOT v_cuest_encontrado THEN
+      p_success := 0;
+      p_output := '{"success":false,"error":"Cuestionario no encontrado"}';
+    ELSE
+      DBMS_LOB.APPEND(v_clob, '}');
+      p_output := v_clob;
+    END IF;
+  EXCEPTION
+    WHEN OTHERS THEN
+      p_success := 0;
+      p_output := '{"success":false,"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}';
+  END sp_obtener_cuestionario_detalle;
+
+  -- 3. Save or update a questionnaire structure
+  PROCEDURE sp_guardar_cuestionario(
+    p_input   IN  CLOB,
+    p_output  OUT CLOB,
+    p_success OUT NUMBER
+  ) AS
+    v_id NUMBER;
+    v_nombre VARCHAR2(500);
+    v_descripcion CLOB;
+    v_publicado NUMBER(1);
+    v_version NUMBER;
+    v_cuest_id NUMBER;
+    v_has_responses NUMBER;
+
+    -- JSON arrays elements counters
+    v_sec_count NUMBER;
+    v_preg_count NUMBER;
+    v_op_count NUMBER;
+    v_assoc_count NUMBER;
+    v_flujo_count NUMBER;
+    v_var_count NUMBER;
+    v_res_count NUMBER;
+
+    -- Local loop variables
+    v_sec_idx NUMBER;
+    v_sec_id NUMBER;
+    v_sec_nombre VARCHAR2(300);
+    v_sec_desc VARCHAR2(1000);
+    v_sec_orden NUMBER;
+
+    v_preg_idx NUMBER;
+    v_preg_id NUMBER;
+    v_preg_tipo_cod VARCHAR2(50);
+    v_preg_tipo_id NUMBER;
+    v_preg_codigo VARCHAR2(100);
+    v_preg_texto CLOB;
+    v_preg_orden NUMBER;
+    v_preg_oblig NUMBER;
+    v_preg_valor NUMBER;
+    v_preg_otro NUMBER;
+
+    v_op_idx NUMBER;
+    v_op_id NUMBER;
+    v_op_texto VARCHAR2(4000);
+    v_op_codigo VARCHAR2(100);
+    v_op_orden NUMBER;
+    v_op_valor NUMBER;
+
+    v_assoc_idx NUMBER;
+    v_assoc_id NUMBER;
+    v_assoc_izq VARCHAR2(1000);
+    v_assoc_der VARCHAR2(1000);
+    v_assoc_val NUMBER;
+
+    v_flujo_idx NUMBER;
+    v_flujo_id NUMBER;
+    v_flujo_orig_cod VARCHAR2(100);
+    v_flujo_orig_id NUMBER;
+    v_flujo_op_cod VARCHAR2(100);
+    v_flujo_op_id NUMBER;
+    v_flujo_oper_cod VARCHAR2(50);
+    v_flujo_oper_id NUMBER;
+    v_flujo_comparacion VARCHAR2(4000);
+    v_flujo_dest_cod VARCHAR2(100);
+    v_flujo_dest_id NUMBER;
+    v_flujo_prioridad NUMBER;
+
+    v_var_idx NUMBER;
+    v_var_id NUMBER;
+    v_var_cod VARCHAR2(100);
+    v_var_nombre VARCHAR2(500);
+    v_var_tipo VARCHAR2(50);
+    v_var_formula CLOB;
+    v_var_orden NUMBER;
+    v_var_desc VARCHAR2(1000);
+
+    v_res_idx NUMBER;
+    v_res_id NUMBER;
+    v_res_desde NUMBER;
+    v_res_hasta NUMBER;
+    v_res_nombre VARCHAR2(500);
+    v_res_desc CLOB;
+    v_res_color VARCHAR2(30);
+
+    -- Rules loop variables
+    v_reglas_count NUMBER;
+    v_reglas_idx NUMBER;
+    v_regla_campo VARCHAR2(100);
+    v_regla_oper VARCHAR2(30);
+    v_regla_esp VARCHAR2(4000);
+    v_regla_agrup VARCHAR2(10);
+
+    -- Native JSON variables
+    v_input_obj JSON_OBJECT_T;
+    v_secciones JSON_ARRAY_T;
+    v_seccion JSON_OBJECT_T;
+    v_preguntas JSON_ARRAY_T;
+    v_pregunta JSON_OBJECT_T;
+    v_opciones JSON_ARRAY_T;
+    v_opcion JSON_OBJECT_T;
+    v_asociaciones JSON_ARRAY_T;
+    v_asociacion JSON_OBJECT_T;
+    
+    v_flujos JSON_ARRAY_T;
+    v_flujo JSON_OBJECT_T;
+    v_reglas JSON_ARRAY_T;
+    v_regla JSON_OBJECT_T;
+    
+    v_variables JSON_ARRAY_T;
+    v_variable JSON_OBJECT_T;
+    
+    v_resultados JSON_ARRAY_T;
+    v_resultado JSON_OBJECT_T;
+
+  BEGIN
+    p_success := 1;
+    
+    -- Parse root JSON object
+    v_input_obj := JSON_OBJECT_T.parse(p_input);
+    
+    IF v_input_obj.has('id') AND NOT v_input_obj.get('id').is_null THEN
+      v_id := v_input_obj.get_number('id');
+    ELSE
+      v_id := NULL;
+    END IF;
+    
+    v_nombre := v_input_obj.get_string('nombre');
+    v_descripcion := v_input_obj.get_string('descripcion');
+    v_publicado := NVL(v_input_obj.get_number('publicado'), 0);
+    v_version := NVL(v_input_obj.get_number('version'), 1);
+
+    IF v_nombre IS NULL THEN
+      p_success := 0;
+      p_output := '{"success":false,"error":"El nombre del cuestionario es requerido"}';
+      RETURN;
+    END IF;
+
+    -- Check if questionnaire has responses
+    v_has_responses := 0;
+    IF v_id IS NOT NULL THEN
+      SELECT COUNT(*) INTO v_has_responses
+      FROM tkr_cuestionario_respuesta
+      WHERE id_cuestionario = v_id;
+    END IF;
+
+    -- Always update the existing questionnaire in place (no new version/row created)
+    IF v_id IS NOT NULL THEN
+        UPDATE tkr_cuestionarios
+        SET nombre = v_nombre,
+            descripcion = v_descripcion,
+            publicado = v_publicado,
+            fecha_publicacion = CASE WHEN v_publicado = 1 AND publicado = 0 THEN SYSDATE ELSE fecha_publicacion END
+        WHERE id = v_id;
+        v_cuest_id := v_id;
+
+        -- Clean up previous child entities
+        DELETE FROM tkr_reglas_flujo WHERE id_flujo_pregunta IN (
+          SELECT fp.id FROM tkr_flujos_pregunta fp, tkr_preguntas p
+          WHERE fp.id_pregunta_origen = p.id AND p.id_cuestionario = v_cuest_id
+        );
+        DELETE FROM tkr_flujos_pregunta WHERE id_pregunta_origen IN (
+          SELECT id FROM tkr_preguntas WHERE id_cuestionario = v_cuest_id
+        );
+        DELETE FROM tkr_pregunta_asociativa WHERE id_pregunta IN (
+          SELECT id FROM tkr_preguntas WHERE id_cuestionario = v_cuest_id
+        );
+        DELETE FROM tkr_opciones_pregunta WHERE id_pregunta IN (
+          SELECT id FROM tkr_preguntas WHERE id_cuestionario = v_cuest_id
+        );
+        DELETE FROM tkr_preguntas WHERE id_cuestionario = v_cuest_id;
+        DELETE FROM tkr_secciones_cuestionario WHERE id_cuestionario = v_cuest_id;
+        DELETE FROM tkr_variables_calculadas WHERE id_cuestionario = v_cuest_id;
+        DELETE FROM tkr_resultados_cuestionario WHERE id_cuestionario = v_cuest_id;
+    ELSE
+        INSERT INTO tkr_cuestionarios (
+          nombre, descripcion, version, publicado, fecha_creacion, estado
+        ) VALUES (
+          v_nombre, v_descripcion, v_version, v_publicado, SYSDATE, 1
+        ) RETURNING id INTO v_cuest_id;
+    END IF;
+
+
+    -- Process Sections & Questions
+    IF v_input_obj.has('secciones') AND NOT v_input_obj.get('secciones').is_null THEN
+      v_secciones := v_input_obj.get_array('secciones');
+      v_sec_count := v_secciones.get_size;
+    ELSE
+      v_sec_count := 0;
+    END IF;
+    
+    IF v_sec_count > 0 THEN
+      FOR v_sec_idx IN 0 .. v_sec_count - 1 LOOP
+        v_seccion := JSON_OBJECT_T(v_secciones.get(v_sec_idx));
+        v_sec_nombre := v_seccion.get_string('nombre');
+        v_sec_desc := v_seccion.get_string('descripcion');
+        v_sec_orden := v_seccion.get_number('orden_visual');
+
+        INSERT INTO tkr_secciones_cuestionario (
+          id_cuestionario, nombre, descripcion, orden_visual, estado
+        ) VALUES (
+          v_cuest_id, v_sec_nombre, v_sec_desc, v_sec_orden, 1
+        ) RETURNING id INTO v_sec_id;
+
+        -- Process Questions of this section
+        IF v_seccion.has('preguntas') AND NOT v_seccion.get('preguntas').is_null THEN
+          v_preguntas := v_seccion.get_array('preguntas');
+          v_preg_count := v_preguntas.get_size;
+        ELSE
+          v_preg_count := 0;
+        END IF;
+        
+        FOR v_preg_idx IN 0 .. v_preg_count - 1 LOOP
+          v_pregunta := JSON_OBJECT_T(v_preguntas.get(v_preg_idx));
+          v_preg_tipo_cod := v_pregunta.get_string('tipo_codigo');
+          v_preg_codigo := v_pregunta.get_string('codigo');
+          v_preg_texto := v_pregunta.get_string('texto_pregunta');
+          v_preg_orden := v_pregunta.get_number('orden_visual');
+          v_preg_oblig := NVL(v_pregunta.get_number('obligatoria'), 0);
+          v_preg_valor := NVL(v_pregunta.get_number('valor_pregunta'), 0);
+          v_preg_otro := NVL(v_pregunta.get_number('permite_otro'), 0);
+
+          -- Get ID of type question
+          BEGIN
+            SELECT id INTO v_preg_tipo_id FROM tkr_tipos_pregunta WHERE codigo = v_preg_tipo_cod;
+          EXCEPTION
+            WHEN NO_DATA_FOUND THEN v_preg_tipo_id := 1; -- Fallback UNICA
+          END;
+
+          INSERT INTO tkr_preguntas (
+            id_cuestionario, id_seccion_cuestionario, id_tipo_pregunta, codigo, texto_pregunta, orden_visual, obligatoria, valor_pregunta, permite_otro, estado
+          ) VALUES (
+            v_cuest_id, v_sec_id, v_preg_tipo_id, v_preg_codigo, v_preg_texto, v_preg_orden, v_preg_oblig, v_preg_valor, v_preg_otro, 1
+          ) RETURNING id INTO v_preg_id;
+
+          -- Process Options of Question
+          IF v_pregunta.has('opciones') AND NOT v_pregunta.get('opciones').is_null THEN
+            v_opciones := v_pregunta.get_array('opciones');
+            v_op_count := v_opciones.get_size;
+          ELSE
+            v_op_count := 0;
+          END IF;
+          
+          FOR v_op_idx IN 0 .. v_op_count - 1 LOOP
+            v_opcion := JSON_OBJECT_T(v_opciones.get(v_op_idx));
+            v_op_texto := v_opcion.get_string('texto_opcion');
+            v_op_codigo := v_opcion.get_string('codigo_opcion');
+            v_op_orden := v_opcion.get_number('orden_visual');
+            v_op_valor := NVL(v_opcion.get_number('valor_opcion'), 0);
+
+            INSERT INTO tkr_opciones_pregunta (
+              id_pregunta, texto_opcion, codigo_opcion, orden_visual, valor_opcion, estado
+            ) VALUES (
+              v_preg_id, v_op_texto, v_op_codigo, v_op_orden, v_op_valor, 1
+            );
+          END LOOP;
+
+          -- Process Associations of Question
+          IF v_pregunta.has('asociaciones') AND NOT v_pregunta.get('asociaciones').is_null THEN
+            v_asociaciones := v_pregunta.get_array('asociaciones');
+            v_assoc_count := v_asociaciones.get_size;
+          ELSE
+            v_assoc_count := 0;
+          END IF;
+          
+          FOR v_assoc_idx IN 0 .. v_assoc_count - 1 LOOP
+            v_asociacion := JSON_OBJECT_T(v_asociaciones.get(v_assoc_idx));
+            v_assoc_izq := v_asociacion.get_string('item_izquierdo');
+            v_assoc_der := v_asociacion.get_string('item_derecho');
+            v_assoc_val := NVL(v_asociacion.get_number('valor_correcto'), 0);
+
+            INSERT INTO tkr_pregunta_asociativa (
+              id_pregunta, item_izquierdo, item_derecho, valor_correcto, estado
+            ) VALUES (
+              v_preg_id, v_assoc_izq, v_assoc_der, v_assoc_val, 1
+            );
+          END LOOP;
+        END LOOP;
+      END LOOP;
+    END IF;
+
+    -- Process Flows & Rules (using codes to lookup IDs)
+    IF v_input_obj.has('flujos') AND NOT v_input_obj.get('flujos').is_null THEN
+      v_flujos := v_input_obj.get_array('flujos');
+      v_flujo_count := v_flujos.get_size;
+    ELSE
+      v_flujo_count := 0;
+    END IF;
+    
+    FOR v_flujo_idx IN 0 .. v_flujo_count - 1 LOOP
+      v_flujo := JSON_OBJECT_T(v_flujos.get(v_flujo_idx));
+      v_flujo_orig_cod := v_flujo.get_string('codigo_pregunta_origen');
+      v_flujo_op_cod := v_flujo.get_string('codigo_opcion_respuesta');
+      v_flujo_oper_cod := v_flujo.get_string('operador_codigo');
+      v_flujo_comparacion := v_flujo.get_string('valor_comparacion');
+      v_flujo_dest_cod := v_flujo.get_string('codigo_pregunta_destino');
+      v_flujo_prioridad := NVL(v_flujo.get_number('prioridad'), 1);
+
+      -- Find origin question ID
+      BEGIN
+        SELECT id INTO v_flujo_orig_id FROM tkr_preguntas WHERE id_cuestionario = v_cuest_id AND codigo = v_flujo_orig_cod;
+      EXCEPTION WHEN NO_DATA_FOUND THEN v_flujo_orig_id := NULL; END;
+
+      -- Find destination question ID
+      BEGIN
+        SELECT id INTO v_flujo_dest_id FROM tkr_preguntas WHERE id_cuestionario = v_cuest_id AND codigo = v_flujo_dest_cod;
+      EXCEPTION WHEN NO_DATA_FOUND THEN v_flujo_dest_id := NULL; END;
+
+      -- Find option ID (if code specified and origin question is valid)
+      v_flujo_op_id := NULL;
+      IF v_flujo_orig_id IS NOT NULL AND v_flujo_op_cod IS NOT NULL THEN
+        BEGIN
+          SELECT id INTO v_flujo_op_id FROM tkr_opciones_pregunta WHERE id_pregunta = v_flujo_orig_id AND codigo_opcion = v_flujo_op_cod;
+        EXCEPTION WHEN NO_DATA_FOUND THEN v_flujo_op_id := NULL; END;
+      END IF;
+
+      -- Find operator ID
+      v_flujo_oper_id := NULL;
+      IF v_flujo_oper_cod IS NOT NULL THEN
+        BEGIN
+          SELECT id INTO v_flujo_oper_id FROM tkr_operadores WHERE codigo = v_flujo_oper_cod;
+        EXCEPTION WHEN NO_DATA_FOUND THEN 
+          -- Insert operator dynamically if missing
+          INSERT INTO tkr_operadores (codigo, descripcion, estado) VALUES (v_flujo_oper_cod, 'Operador ' || v_flujo_oper_cod, 1) RETURNING id INTO v_flujo_oper_id;
+        END;
+      END IF;
+
+      IF v_flujo_orig_id IS NOT NULL AND v_flujo_dest_id IS NOT NULL THEN
+        INSERT INTO tkr_flujos_pregunta (
+          id_pregunta_origen, id_opcion_respuesta, id_operador, valor_comparacion, id_pregunta_destino, prioridad, estado
+        ) VALUES (
+          v_flujo_orig_id, v_flujo_op_id, v_flujo_oper_id, v_flujo_comparacion, v_flujo_dest_id, v_flujo_prioridad, 1
+        ) RETURNING id INTO v_flujo_id;
+
+        -- Process Rules of this Flow
+        IF v_flujo.has('reglas') AND NOT v_flujo.get('reglas').is_null THEN
+          v_reglas := v_flujo.get_array('reglas');
+          v_reglas_count := v_reglas.get_size;
+        ELSE
+          v_reglas_count := 0;
+        END IF;
+        
+        FOR v_reglas_idx IN 0 .. v_reglas_count - 1 LOOP
+          v_regla := JSON_OBJECT_T(v_reglas.get(v_reglas_idx));
+          v_regla_campo := v_regla.get_string('campo_evaluado');
+          v_regla_oper := v_regla.get_string('operador');
+          v_regla_esp := v_regla.get_string('valor_esperado');
+          v_regla_agrup := v_regla.get_string('agrupador');
+
+          INSERT INTO tkr_reglas_flujo (
+            id_flujo_pregunta, campo_evaluado, operador, valor_esperado, agrupador, estado
+          ) VALUES (
+            v_flujo_id, v_regla_campo, v_regla_oper, v_regla_esp, v_regla_agrup, 1
+          );
+        END LOOP;
+      END IF;
+    END LOOP;
+
+    -- Process Variables Calculadas
+    IF v_input_obj.has('variables') AND NOT v_input_obj.get('variables').is_null THEN
+      v_variables := v_input_obj.get_array('variables');
+      v_var_count := v_variables.get_size;
+    ELSE
+      v_var_count := 0;
+    END IF;
+    
+    FOR v_var_idx IN 0 .. v_var_count - 1 LOOP
+      v_variable := JSON_OBJECT_T(v_variables.get(v_var_idx));
+      v_var_cod := v_variable.get_string('codigo_variable');
+      v_var_nombre := v_variable.get_string('nombre_variable');
+      v_var_tipo := v_variable.get_string('tipo_variable');
+      v_var_formula := v_variable.get_string('formula');
+      v_var_orden := NVL(v_variable.get_number('orden_calculo'), 1);
+      v_var_desc := v_variable.get_string('descripcion');
+
+      IF v_var_cod IS NOT NULL THEN
+        INSERT INTO tkr_variables_calculadas (
+          id_cuestionario, codigo_variable, nombre_variable, tipo_variable, formula, orden_calculo, descripcion, estado, fecha_creacion
+        ) VALUES (
+          v_cuest_id, v_var_cod, v_var_nombre, v_var_tipo, v_var_formula, v_var_orden, v_var_desc, 1, SYSDATE
+        );
+      END IF;
+    END LOOP;
+
+    -- Process Resultados Clasificacion
+    IF v_input_obj.has('resultados') AND NOT v_input_obj.get('resultados').is_null THEN
+      v_resultados := v_input_obj.get_array('resultados');
+      v_res_count := v_resultados.get_size;
+    ELSE
+      v_res_count := 0;
+    END IF;
+    
+    FOR v_res_idx IN 0 .. v_res_count - 1 LOOP
+      v_resultado := JSON_OBJECT_T(v_resultados.get(v_res_idx));
+      v_res_desde := v_resultado.get_number('puntaje_desde');
+      v_res_hasta := v_resultado.get_number('puntaje_hasta');
+      v_res_nombre := v_resultado.get_string('nombre_resultado');
+      v_res_desc := v_resultado.get_string('descripcion');
+      v_res_color := v_resultado.get_string('color');
+
+      IF v_res_nombre IS NOT NULL THEN
+        INSERT INTO tkr_resultados_cuestionario (
+          id_cuestionario, puntaje_desde, puntaje_hasta, nombre_resultado, descripcion, color, estado
+        ) VALUES (
+          v_cuest_id, v_res_desde, v_res_hasta, v_res_nombre, v_res_desc, v_res_color, 1
+        );
+      END IF;
+    END LOOP;
+
+    COMMIT;
+    p_output := '{"success":true,"id":' || v_cuest_id || ',"version":' || v_version || '}';
+  EXCEPTION
+    WHEN OTHERS THEN
+      ROLLBACK;
+      p_success := 0;
+      p_output := '{"success":false,"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}';
+  END sp_guardar_cuestionario;
+
+  -- 4. Change status (publish, draft or soft-delete)
+  PROCEDURE sp_cambiar_estado_cuestionario(
+    p_input   IN  CLOB,
+    p_output  OUT CLOB,
+    p_success OUT NUMBER
+  ) AS
+    v_id NUMBER;
+    v_accion VARCHAR2(30); -- 'publish', 'draft', 'delete'
+  BEGIN
+    p_success := 1;
+    v_id := JSON_VALUE(p_input, '$.id' RETURNING NUMBER);
+    v_accion := JSON_VALUE(p_input, '$.accion');
+
+    IF v_id IS NULL OR v_accion IS NULL THEN
+      p_success := 0;
+      p_output := '{"success":false,"error":"Parámetros id y accion son requeridos"}';
+      RETURN;
+    END IF;
+
+    IF v_accion = 'publish' THEN
+      -- Archive old versions first
+      DECLARE
+        v_nombre VARCHAR2(500);
+      BEGIN
+        SELECT nombre INTO v_nombre FROM tkr_cuestionarios WHERE id = v_id;
+        
+        -- Unpublish other versions
+        UPDATE tkr_cuestionarios
+        SET publicado = 0
+        WHERE nombre = v_nombre AND id != v_id;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END;
+
+      UPDATE tkr_cuestionarios
+      SET publicado = 1,
+          fecha_publicacion = SYSDATE
+      WHERE id = v_id;
+    ELSIF v_accion = 'draft' THEN
+      UPDATE tkr_cuestionarios
+      SET publicado = 0
+      WHERE id = v_id;
+    ELSIF v_accion = 'delete' THEN
+      UPDATE tkr_cuestionarios
+      SET estado = 0
+      WHERE id = v_id;
+    ELSE
+      p_success := 0;
+      p_output := '{"success":false,"error":"Acción no soportada. Usar: publish, draft, delete"}';
+      RETURN;
+    END IF;
+
+    COMMIT;
+    p_output := '{"success":true,"id":' || v_id || ',"accion":"' || v_accion || '"}';
+  EXCEPTION
+    WHEN OTHERS THEN
+      ROLLBACK;
+      p_success := 0;
+      p_output := '{"success":false,"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}';
+  END sp_cambiar_estado_cuestionario;
+
+  -- 5. Duplicate a questionnaire with all its questions, sections, options, and rules
+  PROCEDURE sp_duplicar_cuestionario(
+    p_input   IN  CLOB,
+    p_output  OUT CLOB,
+    p_success OUT NUMBER
+  ) AS
+    v_id NUMBER;
+    v_new_nombre VARCHAR2(500);
+    v_new_cuest_id NUMBER;
+    v_descripcion CLOB;
+    v_orig_nombre VARCHAR2(500);
+    v_orig_version NUMBER;
+    v_new_version NUMBER;
+    v_base_nombre VARCHAR2(500);
+    v_new_nombre_generated VARCHAR2(500);
+  BEGIN
+    p_success := 1;
+    v_id := JSON_VALUE(p_input, '$.id' RETURNING NUMBER);
+    v_new_nombre := JSON_VALUE(p_input, '$.nuevo_nombre');
+
+    IF v_id IS NULL THEN
+      p_success := 0;
+      p_output := '{"success":false,"error":"Parámetro id es requerido"}';
+      RETURN;
+    END IF;
+
+    -- Retrieve source questionnaire details into variables first
+    SELECT nombre, descripcion, version INTO v_orig_nombre, v_descripcion, v_orig_version
+    FROM tkr_cuestionarios
+    WHERE id = v_id;
+
+    v_new_version := v_orig_version + 1;
+    v_base_nombre := REGEXP_REPLACE(v_orig_nombre, '\s+version\s+[0-9]+$', '', 1, 0, 'i');
+    v_new_nombre_generated := v_base_nombre || ' version ' || v_new_version;
+
+    -- Create duplicate questionnaire entry
+    INSERT INTO tkr_cuestionarios (
+      nombre, descripcion, version, publicado, fecha_creacion, estado
+    ) VALUES (
+      NVL(v_new_nombre, v_new_nombre_generated), v_descripcion, v_new_version, 0, SYSDATE, 1
+    ) RETURNING id INTO v_new_cuest_id;
+
+    -- Duplicate sections and maintain association maps
+    FOR s IN (
+      SELECT id, nombre, descripcion, orden_visual
+      FROM tkr_secciones_cuestionario
+      WHERE id_cuestionario = v_id AND estado = 1
+      ORDER BY orden_visual
+    ) LOOP
+      DECLARE
+        v_new_sec_id NUMBER;
+      BEGIN
+        INSERT INTO tkr_secciones_cuestionario (
+          id_cuestionario, nombre, descripcion, orden_visual, estado
+        ) VALUES (
+          v_new_cuest_id, s.nombre, s.descripcion, s.orden_visual, 1
+        ) RETURNING id INTO v_new_sec_id;
+
+        -- Duplicate questions in section
+        FOR q IN (
+          SELECT id, id_tipo_pregunta, codigo, texto_pregunta, orden_visual, obligatoria, valor_pregunta, permite_otro
+          FROM tkr_preguntas
+          WHERE id_seccion_cuestionario = s.id AND estado = 1
+          ORDER BY orden_visual
+        ) LOOP
+          DECLARE
+            v_new_preg_id NUMBER;
+          BEGIN
+            INSERT INTO tkr_preguntas (
+              id_cuestionario, id_seccion_cuestionario, id_tipo_pregunta, codigo, texto_pregunta, orden_visual, obligatoria, valor_pregunta, permite_otro, estado
+            ) VALUES (
+              v_new_cuest_id, v_new_sec_id, q.id_tipo_pregunta, q.codigo, q.texto_pregunta, q.orden_visual, q.obligatoria, q.valor_pregunta, q.permite_otro, 1
+            ) RETURNING id INTO v_new_preg_id;
+
+            -- Duplicate options
+            INSERT INTO tkr_opciones_pregunta (id_pregunta, texto_opcion, codigo_opcion, orden_visual, valor_opcion, estado)
+            SELECT v_new_preg_id, texto_opcion, codigo_opcion, orden_visual, valor_opcion, 1
+            FROM tkr_opciones_pregunta
+            WHERE id_pregunta = q.id AND estado = 1;
+
+            -- Duplicate associative fields
+            INSERT INTO tkr_pregunta_asociativa (id_pregunta, item_izquierdo, item_derecho, valor_correcto, estado)
+            SELECT v_new_preg_id, item_izquierdo, item_derecho, valor_correcto, 1
+            FROM tkr_pregunta_asociativa
+            WHERE id_pregunta = q.id AND estado = 1;
+          END;
+        END LOOP;
+      END;
+    END LOOP;
+
+    -- Duplicate logical flows and rules
+    -- Recreate flows using lookups based on codes for the newly copied questions/options
+    FOR fp IN (
+      SELECT f.id, qo.codigo as orig_cod, qd.codigo as dest_cod, op.codigo_opcion as op_cod, f.id_operador, f.valor_comparacion, f.prioridad
+      FROM tkr_flujos_pregunta f
+      JOIN tkr_preguntas qo ON f.id_pregunta_origen = qo.id
+      JOIN tkr_preguntas qd ON f.id_pregunta_destino = qd.id
+      LEFT JOIN tkr_opciones_pregunta op ON f.id_opcion_respuesta = op.id
+      WHERE qo.id_cuestionario = v_id AND f.estado = 1
+    ) LOOP
+      DECLARE
+        v_orig_id NUMBER;
+        v_dest_id NUMBER;
+        v_op_id NUMBER := NULL;
+        v_new_flujo_id NUMBER;
+      BEGIN
+        SELECT id INTO v_orig_id FROM tkr_preguntas WHERE id_cuestionario = v_new_cuest_id AND codigo = fp.orig_cod;
+        SELECT id INTO v_dest_id FROM tkr_preguntas WHERE id_cuestionario = v_new_cuest_id AND codigo = fp.dest_cod;
+        
+        IF fp.op_cod IS NOT NULL THEN
+          SELECT id INTO v_op_id FROM tkr_opciones_pregunta WHERE id_pregunta = v_orig_id AND codigo_opcion = fp.op_cod;
+        END IF;
+
+        INSERT INTO tkr_flujos_pregunta (
+          id_pregunta_origen, id_opcion_respuesta, id_operador, valor_comparacion, id_pregunta_destino, prioridad, estado
+        ) VALUES (
+          v_orig_id, v_op_id, fp.id_operador, fp.valor_comparacion, v_dest_id, fp.prioridad, 1
+        ) RETURNING id INTO v_new_flujo_id;
+
+        -- Duplicate rules of flow
+        INSERT INTO tkr_reglas_flujo (id_flujo_pregunta, campo_evaluado, operador, valor_esperado, agrupador, estado)
+        SELECT v_new_flujo_id, campo_evaluado, operador, valor_esperado, agrupador, 1
+        FROM tkr_reglas_flujo
+        WHERE id_flujo_pregunta = fp.id AND estado = 1;
+      EXCEPTION WHEN OTHERS THEN NULL; -- Skip if lookups fail
+      END;
+    END LOOP;
+
+    -- Duplicate calculated variables
+    INSERT INTO tkr_variables_calculadas (
+      id_cuestionario, codigo_variable, nombre_variable, tipo_variable, formula, orden_calculo, descripcion, estado, fecha_creacion
+    )
+    SELECT v_new_cuest_id, codigo_variable, nombre_variable, tipo_variable, formula, orden_calculo, descripcion, 1, SYSDATE
+    FROM tkr_variables_calculadas
+    WHERE id_cuestionario = v_id AND estado = 1;
+
+    -- Duplicate results classifications
+    INSERT INTO tkr_resultados_cuestionario (
+      id_cuestionario, puntaje_desde, puntaje_hasta, nombre_resultado, descripcion, color, estado
+    )
+    SELECT v_new_cuest_id, puntaje_desde, puntaje_hasta, nombre_resultado, descripcion, color, 1
+    FROM tkr_resultados_cuestionario
+    WHERE id_cuestionario = v_id AND estado = 1;
+
+    COMMIT;
+    p_output := '{"success":true,"id":' || v_new_cuest_id || '}';
+  EXCEPTION
+    WHEN OTHERS THEN
+      ROLLBACK;
+      p_success := 0;
+      p_output := '{"success":false,"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}';
+  END sp_duplicar_cuestionario;
+
+  -- 6. Start a questionnaire response instance
+  PROCEDURE sp_iniciar_respuesta(
+    p_input   IN  CLOB,
+    p_output  OUT CLOB,
+    p_success OUT NUMBER
+  ) AS
+    v_id_cuestionario NUMBER;
+    v_id_usuario NUMBER;
+    v_resp_id NUMBER;
+  BEGIN
+    p_success := 1;
+    v_id_cuestionario := JSON_VALUE(p_input, '$.id_cuestionario' RETURNING NUMBER);
+    v_id_usuario := JSON_VALUE(p_input, '$.id_usuario' RETURNING NUMBER);
+
+    IF v_id_cuestionario IS NULL THEN
+      p_success := 0;
+      p_output := '{"success":false,"error":"Parámetro id_cuestionario es requerido"}';
+      RETURN;
+    END IF;
+
+    -- Insert into responses instance tracker
+    INSERT INTO tkr_cuestionario_respuesta (
+      id_cuestionario, id_usuario, fecha_inicio, estado
+    ) VALUES (
+      v_id_cuestionario, v_id_usuario, SYSDATE, 0 -- 0 = draft / in progress
+    ) RETURNING id INTO v_resp_id;
+
+    COMMIT;
+    p_output := '{"success":true,"id_cuestionario_respuesta":' || v_resp_id || '}';
+  EXCEPTION
+    WHEN OTHERS THEN
+      ROLLBACK;
+      p_success := 0;
+      p_output := '{"success":false,"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}';
+  END sp_iniciar_respuesta;
+
+  -- 7. Save answers
+  PROCEDURE sp_guardar_respuestas(
+    p_input   IN  CLOB,
+    p_output  OUT CLOB,
+    p_success OUT NUMBER
+  ) AS
+    v_resp_id NUMBER;
+    v_ans_count NUMBER;
+    v_ans_idx NUMBER;
+    v_preg_id NUMBER;
+    v_texto CLOB;
+    v_numero NUMBER;
+    v_fecha DATE;
+    v_fecha_str VARCHAR2(100);
+    v_valor_obt NUMBER;
+    v_ans_id NUMBER;
+    v_op_count NUMBER;
+    v_op_idx NUMBER;
+    v_op_id NUMBER;
+    v_op_val NUMBER;
+
+    -- Native JSON variables
+    v_input_obj JSON_OBJECT_T;
+    v_respuestas JSON_ARRAY_T;
+    v_respuesta JSON_OBJECT_T;
+    v_opciones JSON_ARRAY_T;
+    v_opcion JSON_OBJECT_T;
+  BEGIN
+    p_success := 1;
+    
+    -- Parse root JSON object
+    v_input_obj := JSON_OBJECT_T.parse(p_input);
+    
+    IF v_input_obj.has('id_cuestionario_respuesta') AND NOT v_input_obj.get('id_cuestionario_respuesta').is_null THEN
+      v_resp_id := v_input_obj.get_number('id_cuestionario_respuesta');
+    ELSE
+      v_resp_id := NULL;
+    END IF;
+
+    IF v_resp_id IS NULL THEN
+      p_success := 0;
+      p_output := '{"success":false,"error":"Parámetro id_cuestionario_respuesta es requerido"}';
+      RETURN;
+    END IF;
+
+    -- Get responses array
+    IF v_input_obj.has('respuestas') AND NOT v_input_obj.get('respuestas').is_null THEN
+      v_respuestas := v_input_obj.get_array('respuestas');
+      v_ans_count := v_respuestas.get_size;
+    ELSE
+      v_ans_count := 0;
+    END IF;
+    
+    FOR v_ans_idx IN 0 .. v_ans_count - 1 LOOP
+      v_respuesta := JSON_OBJECT_T(v_respuestas.get(v_ans_idx));
+      v_preg_id := v_respuesta.get_number('id_pregunta');
+      v_texto := v_respuesta.get_string('respuesta_texto');
+      v_numero := v_respuesta.get_number('respuesta_numero');
+      v_fecha_str := v_respuesta.get_string('respuesta_fecha');
+      v_valor_obt := NVL(v_respuesta.get_number('valor_obtenido'), 0);
+
+      IF v_fecha_str IS NOT NULL THEN
+        BEGIN
+          v_fecha := TO_DATE(SUBSTR(v_fecha_str, 1, 10), 'YYYY-MM-DD');
+        EXCEPTION WHEN OTHERS THEN v_fecha := NULL; END;
+      ELSE
+        v_fecha := NULL;
+      END IF;
+
+      -- Insert or update single question response
+      BEGIN
+        SELECT id INTO v_ans_id 
+        FROM tkr_respuestas 
+        WHERE id_cuestionario_respuesta = v_resp_id AND id_pregunta = v_preg_id;
+
+        UPDATE tkr_respuestas
+        SET respuesta_texto = v_texto,
+            respuesta_numero = v_numero,
+            respuesta_fecha = v_fecha,
+            valor_obtenido = v_valor_obt
+        WHERE id = v_ans_id;
+
+        -- Clean up previous options for this answer
+        DELETE FROM tkr_respuesta_opciones WHERE id_respuesta = v_ans_id;
+      EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+          INSERT INTO tkr_respuestas (
+            id_cuestionario_respuesta, id_pregunta, respuesta_texto, respuesta_numero, respuesta_fecha, valor_obtenido, estado
+          ) VALUES (
+            v_resp_id, v_preg_id, v_texto, v_numero, v_fecha, v_valor_obt, 1
+          ) RETURNING id INTO v_ans_id;
+      END;
+
+      -- Process sub-options for multiple/single select questions if present
+      IF v_respuesta.has('opciones_seleccionadas') AND NOT v_respuesta.get('opciones_seleccionadas').is_null THEN
+        v_opciones := v_respuesta.get_array('opciones_seleccionadas');
+        v_op_count := v_opciones.get_size;
+      ELSE
+        v_op_count := 0;
+      END IF;
+      
+      FOR v_op_idx IN 0 .. v_op_count - 1 LOOP
+        v_opcion := JSON_OBJECT_T(v_opciones.get(v_op_idx));
+        v_op_id := v_opcion.get_number('id_opcion');
+        v_op_val := NVL(v_opcion.get_number('valor_obtenido'), 0);
+
+        INSERT INTO tkr_respuesta_opciones (
+          id_respuesta, id_opcion_pregunta, valor_obtenido, estado
+        ) VALUES (
+          v_ans_id, v_op_id, v_op_val, 1
+        );
+      END LOOP;
+    END LOOP;
+
+    COMMIT;
+    p_output := '{"success":true,"id_cuestionario_respuesta":' || v_resp_id || '}';
+  EXCEPTION
+    WHEN OTHERS THEN
+      ROLLBACK;
+      p_success := 0;
+      p_output := '{"success":false,"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}';
+  END sp_guardar_respuestas;
+
+  -- 8. Finalize questionnaire response, calculate scores and classifications
+  PROCEDURE sp_finalizar_cuestionario(
+    p_input   IN  CLOB,
+    p_output  OUT CLOB,
+    p_success OUT NUMBER
+  ) AS
+    v_resp_id NUMBER;
+    v_cuest_id NUMBER;
+    v_total_score NUMBER := 0;
+    v_clasificacion VARCHAR2(500) := 'Sin Clasificar';
+    v_color VARCHAR2(30) := 'grey';
+  BEGIN
+    p_success := 1;
+    v_resp_id := JSON_VALUE(p_input, '$.id_cuestionario_respuesta' RETURNING NUMBER);
+
+    IF v_resp_id IS NULL THEN
+      p_success := 0;
+      p_output := '{"success":false,"error":"Parámetro id_cuestionario_respuesta es requerido"}';
+      RETURN;
+    END IF;
+
+    -- Fetch questionnaire ID
+    SELECT id_cuestionario INTO v_cuest_id 
+    FROM tkr_cuestionario_respuesta 
+    WHERE id = v_resp_id;
+
+    -- 1. Calculate Score from tkr_respuestas (which aggregates valor_obtenido)
+    -- Sum values of responses + option specific values
+    SELECT NVL(SUM(valor_obtenido), 0) INTO v_total_score
+    FROM tkr_respuestas
+    WHERE id_cuestionario_respuesta = v_resp_id;
+
+    -- Also sum values from selected options
+    DECLARE
+      v_opts_score NUMBER;
+    BEGIN
+      SELECT NVL(SUM(ro.valor_obtenido), 0) INTO v_opts_score
+      FROM tkr_respuesta_opciones ro, tkr_respuestas r
+      WHERE ro.id_respuesta = r.id AND r.id_cuestionario_respuesta = v_resp_id;
+      
+      v_total_score := v_total_score + v_opts_score;
+    END;
+
+    -- 2. Find Classification range from tkr_resultados_cuestionario
+    BEGIN
+      SELECT nombre_resultado, color
+      INTO v_clasificacion, v_color
+      FROM tkr_resultados_cuestionario
+      WHERE id_cuestionario = v_cuest_id
+        AND v_total_score BETWEEN puntaje_desde AND puntaje_hasta
+        AND estado = 1
+        AND ROWNUM = 1;
+    EXCEPTION
+      WHEN NO_DATA_FOUND THEN
+        -- Fallback: check if we can get closest range
+        BEGIN
+          SELECT nombre_resultado, color INTO v_clasificacion, v_color
+          FROM (
+            SELECT nombre_resultado, color FROM tkr_resultados_cuestionario
+            WHERE id_cuestionario = v_cuest_id AND estado = 1
+            ORDER BY ABS(puntaje_desde - v_total_score)
+          ) WHERE ROWNUM = 1;
+        EXCEPTION WHEN OTHERS THEN
+          v_clasificacion := 'Completado (Puntuación: ' || v_total_score || ')';
+          v_color := 'green';
+        END;
+    END;
+
+    -- Update questionnaire response with scores
+    UPDATE tkr_cuestionario_respuesta
+    SET fecha_fin = SYSDATE,
+        puntaje_total = v_total_score,
+        clasificacion_final = v_clasificacion,
+        estado = 1 -- 1 = Completed
+    WHERE id = v_resp_id;
+
+    COMMIT;
+    p_output := '{"success":true,"id_cuestionario_respuesta":' || v_resp_id || 
+      ',"puntaje_total":' || v_total_score || 
+      ',"clasificacion_final":"' || f_escape_json(v_clasificacion) || '"' ||
+      ',"color":"' || f_escape_json(v_color) || '"}';
+  EXCEPTION
+    WHEN OTHERS THEN
+      ROLLBACK;
+      p_success := 0;
+      p_output := '{"success":false,"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}';
+  END sp_finalizar_cuestionario;
+
+  -- 9. Get detail of a questionnaire response instance
+  PROCEDURE sp_obtener_respuesta_detalle(
+    p_input   IN  CLOB,
+    p_output  OUT CLOB,
+    p_success OUT NUMBER
+  ) AS
+    v_resp_id NUMBER;
+    v_clob CLOB;
+    v_resp_encontrada BOOLEAN := FALSE;
+    v_primero BOOLEAN := TRUE;
+    v_primer_op BOOLEAN := TRUE;
+  BEGIN
+    p_success := 1;
+    v_resp_id := JSON_VALUE(p_input, '$.id_cuestionario_respuesta' RETURNING NUMBER);
+
+    IF v_resp_id IS NULL THEN
+      p_success := 0;
+      p_output := '{"success":false,"error":"Parámetro id_cuestionario_respuesta es requerido"}';
+      RETURN;
+    END IF;
+
+    DBMS_LOB.CREATETEMPORARY(v_clob, TRUE);
+
+    -- Load Questionnaire Response Meta
+    FOR rec IN (
+      SELECT cr.id, cr.id_cuestionario, c.nombre as cuestionario_nombre, cr.id_usuario, 
+             TO_CHAR(cr.fecha_inicio, 'YYYY-MM-DD"T"HH24:MI:SS') as fecha_inicio,
+             TO_CHAR(cr.fecha_fin, 'YYYY-MM-DD"T"HH24:MI:SS') as fecha_fin,
+             cr.puntaje_total, cr.clasificacion_final, cr.estado
+      FROM tkr_cuestionario_respuesta cr, tkr_cuestionarios c
+      WHERE cr.id = v_resp_id AND cr.id_cuestionario = c.id
+    ) LOOP
+      v_resp_encontrada := TRUE;
+      DBMS_LOB.APPEND(v_clob, '{"success":true,"data":{' ||
+        '"id":' || rec.id ||
+        ',"id_cuestionario":' || rec.id_cuestionario ||
+        ',"cuestionario_nombre":"' || f_escape_json(rec.cuestionario_nombre) || '"' ||
+        ',"id_usuario":' || NVL(TO_CHAR(rec.id_usuario), 'null') ||
+        ',"fecha_inicio":"' || rec.fecha_inicio || '"' ||
+        ',"fecha_fin":' || CASE WHEN rec.fecha_fin IS NOT NULL THEN '"' || rec.fecha_fin || '"' ELSE 'null' END ||
+        ',"puntaje_total":' || NVL(rec.puntaje_total, 0) ||
+        ',"clasificacion_final":' || CASE WHEN rec.clasificacion_final IS NOT NULL THEN '"' || f_escape_json(rec.clasificacion_final) || '"' ELSE 'null' END ||
+        ',"estado":' || rec.estado ||
+        ',"respuestas":[');
+
+      -- Fetch individual question responses
+      FOR a IN (
+        SELECT ans.id, ans.id_pregunta, p.codigo as pregunta_codigo, p.texto_pregunta, 
+               ans.respuesta_texto, ans.respuesta_numero, TO_CHAR(ans.respuesta_fecha, 'YYYY-MM-DD') as respuesta_fecha, 
+               ans.valor_obtenido
+        FROM tkr_respuestas ans, tkr_preguntas p
+        WHERE ans.id_cuestionario_respuesta = rec.id AND ans.id_pregunta = p.id AND ans.estado = 1
+        ORDER BY p.orden_visual
+      ) LOOP
+        IF NOT v_primero THEN
+          DBMS_LOB.APPEND(v_clob, ',');
+        END IF;
+        v_primero := FALSE;
+
+        DBMS_LOB.APPEND(v_clob, '{"id":' || a.id ||
+          ',"id_pregunta":' || a.id_pregunta ||
+          ',"pregunta_codigo":"' || a.pregunta_codigo || '"' ||
+          ',"pregunta_texto":"' || f_escape_json(f_clob_to_str(a.texto_pregunta)) || '"' ||
+          ',"respuesta_texto":"' || f_escape_json(f_clob_to_str(a.respuesta_texto)) || '"' ||
+          ',"respuesta_numero":' || NVL(TO_CHAR(a.respuesta_numero), 'null') ||
+          ',"respuesta_fecha":' || CASE WHEN a.respuesta_fecha IS NOT NULL THEN '"' || a.respuesta_fecha || '"' ELSE 'null' END ||
+          ',"valor_obtenido":' || a.valor_obtenido ||
+          ',"opciones_seleccionadas":[');
+
+        v_primer_op := TRUE;
+        -- Fetch selected options if applicable
+        FOR o IN (
+          SELECT ro.id, ro.id_opcion_pregunta, op.texto_opcion, op.codigo_opcion, ro.valor_obtenido
+          FROM tkr_respuesta_opciones ro, tkr_opciones_pregunta op
+          WHERE ro.id_respuesta = a.id AND ro.id_opcion_pregunta = op.id AND ro.estado = 1
+        ) LOOP
+          IF NOT v_primer_op THEN
+            DBMS_LOB.APPEND(v_clob, ',');
+          END IF;
+          v_primer_op := FALSE;
+
+          DBMS_LOB.APPEND(v_clob, '{"id":' || o.id ||
+            ',"id_opcion":' || o.id_opcion_pregunta ||
+            ',"texto_opcion":"' || f_escape_json(o.texto_opcion) || '"' ||
+            ',"codigo_opcion":"' || f_escape_json(o.codigo_opcion) || '"' ||
+            ',"valor_obtenido":' || o.valor_obtenido || '}');
+        END LOOP;
+        
+        DBMS_LOB.APPEND(v_clob, ']}');
+      END LOOP;
+
+      DBMS_LOB.APPEND(v_clob, ']}}');
+    END LOOP;
+
+    IF NOT v_resp_encontrada THEN
+      p_success := 0;
+      p_output := '{"success":false,"error":"Detalle de respuesta no encontrado"}';
+    ELSE
+      p_output := v_clob;
+    END IF;
+  EXCEPTION
+    WHEN OTHERS THEN
+      p_success := 0;
+      p_output := '{"success":false,"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}';
+  END sp_obtener_respuesta_detalle;
+
+  -- 10. Get admin dashboard stats
+  PROCEDURE sp_obtener_dashboard_stats(
+    p_input   IN  CLOB,
+    p_output  OUT CLOB,
+    p_success OUT NUMBER
+  ) AS
+    v_clob CLOB;
+    v_cuest_count NUMBER;
+    v_total_preg NUMBER;
+    v_count_unica NUMBER;
+    v_count_multiple NUMBER;
+    v_count_abierta NUMBER;
+    v_count_asociativa NUMBER;
+
+    -- Loop variables
+    v_primero BOOLEAN := TRUE;
+  BEGIN
+    p_success := 1;
+    DBMS_LOB.CREATETEMPORARY(v_clob, TRUE);
+
+    -- 1. General Metrics
+    SELECT COUNT(*) INTO v_cuest_count FROM tkr_cuestionarios WHERE estado = 1;
+
+    SELECT COUNT(*) INTO v_total_preg
+    FROM tkr_preguntas p
+    JOIN tkr_cuestionarios c ON p.id_cuestionario = c.id
+    WHERE p.estado = 1 AND c.estado = 1;
+
+    SELECT COUNT(CASE WHEN p.id_tipo_pregunta = 1 THEN 1 END),
+           COUNT(CASE WHEN p.id_tipo_pregunta = 2 THEN 1 END),
+           COUNT(CASE WHEN p.id_tipo_pregunta = 3 THEN 1 END),
+           COUNT(CASE WHEN p.id_tipo_pregunta = 4 THEN 1 END)
+    INTO v_count_unica, v_count_multiple, v_count_abierta, v_count_asociativa
+    FROM tkr_preguntas p
+    JOIN tkr_cuestionarios c ON p.id_cuestionario = c.id
+    WHERE p.estado = 1 AND c.estado = 1;
+
+    DBMS_LOB.APPEND(v_clob, '{"success":true,"metrics":{' ||
+      '"total_cuestionarios":' || v_cuest_count ||
+      ',"total_preguntas":' || v_total_preg ||
+      ',"count_unica":' || v_count_unica ||
+      ',"count_multiple":' || v_count_multiple ||
+      ',"count_abierta":' || v_count_abierta ||
+      ',"count_asociativa":' || v_count_asociativa ||
+      '},"cuestionarios_desglose":[');
+
+    -- 2. Breakdown per questionnaire
+    FOR c IN (
+      SELECT id, nombre, version, publicado
+      FROM tkr_cuestionarios
+      WHERE estado = 1
+      ORDER BY nombre
+    ) LOOP
+      DECLARE
+        v_c_preg_count NUMBER;
+      BEGIN
+        -- Count active questions
+        SELECT COUNT(*) INTO v_c_preg_count
+        FROM tkr_preguntas
+        WHERE id_cuestionario = c.id AND estado = 1;
+
+        IF NOT v_primero THEN
+          DBMS_LOB.APPEND(v_clob, ',');
+        END IF;
+        v_primero := FALSE;
+
+        DBMS_LOB.APPEND(v_clob, '{"id":' || c.id ||
+          ',"nombre":"' || f_escape_json(c.nombre) || '"' ||
+          ',"version":' || c.version ||
+          ',"publicado":' || c.publicado ||
+          ',"total_preguntas":' || v_c_preg_count || '}');
+      END;
+    END LOOP;
+
+    DBMS_LOB.APPEND(v_clob, ']}');
+    p_output := v_clob;
+  EXCEPTION
+    WHEN OTHERS THEN
+      p_success := 0;
+      p_output := '{"success":false,"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}';
+  END sp_obtener_dashboard_stats;
+
+END pkgln_cuestionarios;
+/

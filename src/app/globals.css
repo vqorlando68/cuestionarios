@@ -1,0 +1,241 @@
+@import "tailwindcss";
+
+:root {
+  /* HSL 198 100% 97% (#effaff) */
+  --background: #effaff;
+  --foreground: #363636;
+  --navy-dark: #04354d;
+  
+  /* Primary Orange */
+  --primary: #ff7a39;
+  --primary-hover: #e06020;
+  
+  /* Accent Cyan */
+  --accent: #00aae1;
+  --accent-soft: rgba(0, 170, 225, 0.1);
+  --border: #b6ecff;
+  
+  /* Semantic */
+  --success: #01ae6c;
+  --success-soft: rgba(1, 174, 108, 0.1);
+  --error: hsl(0 84.2% 60.2%);
+  --error-soft: rgba(220, 38, 38, 0.1);
+  --warning: #ffb020;
+  --warning-soft: rgba(255, 176, 32, 0.1);
+  
+  /* Card and Glassmorphism */
+  --card: rgba(255, 255, 255, 0.60);
+  --card-border: rgba(0, 170, 225, 0.30);
+  --card-shadow: 0 4px 24px rgba(0, 170, 225, 0.10);
+  --card-blur: blur(16px) saturate(180%);
+  --popover: #ffffff;
+  
+  --radius-lg: 16px;
+  --radius-md: 10px;
+  --radius-sm: 6px;
+}
+
+.dark {
+  /* HSL 0 0% 7% (#121212) */
+  --background: #121212;
+  --foreground: #fafafa;
+  --navy-dark: #fafafa;
+  
+  /* Primary Orange Dark */
+  --primary: #e95814;
+  --primary-hover: #e04a14;
+  
+  /* Accent Cyan Dark / Neon Cyan */
+  --accent: #06b6d4;
+  --accent-soft: rgba(6, 182, 212, 0.1);
+  --border: #262626;
+  
+  /* Semantic */
+  --success: #0fecaa;
+  --success-soft: rgba(15, 236, 170, 0.1);
+  --error: hsl(0 62.8% 30.6%);
+  --error-soft: rgba(127, 29, 29, 0.2);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.1);
+  
+  /* Dark Cards */
+  --card: #1a1a1a;
+  --card-border: #262626;
+  --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --card-blur: none;
+  --popover: #1a1a1a;
+}
+
+/* Core styles */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Apply linear gradient in light mode only for premium styling */
+html:not(.dark) body {
+  background: linear-gradient(135deg, #effaff 0%, #dff4ff 40%, #b6ecff 100%);
+  background-attachment: fixed;
+}
+
+/* Premium custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+/* Glassmorphism helpers */
+.glass-panel {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+  backdrop-filter: var(--card-blur);
+  -webkit-backdrop-filter: var(--card-blur);
+  border-radius: var(--radius-lg);
+}
+
+/* ------------------------------------------------------------------------
+   TRANSLATION MAPPINGS FOR LIGHT MODE (Tailwind dark-theme overrides)
+   Matches the colors.txt spec sheets
+   ------------------------------------------------------------------------ */
+
+html:not(.dark) .bg-\[\#050812\] {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+}
+
+html:not(.dark) .bg-\[\#03060f\] {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+}
+
+html:not(.dark) .bg-\[\#0f172a\] {
+  background-color: #effaff !important;
+}
+
+html:not(.dark) .bg-\[\#0b101e\] {
+  background-color: #effaff !important;
+}
+
+html:not(.dark) .bg-\[\#0d1323\] {
+  background-color: #effaff !important;
+}
+
+html:not(.dark) .bg-\[\#111827\] {
+  background-color: #dff4ff !important;
+}
+
+html:not(.dark) .bg-\[\#0a0e17\] {
+  background-color: #f0faff !important;
+}
+
+html:not(.dark) .bg-\[\#151c2f\] {
+  background-color: rgba(182, 236, 255, 0.30) !important;
+}
+
+html:not(.dark) .bg-black\/80 {
+  background-color: rgba(0, 99, 141, 0.08) !important;
+}
+
+/* Text Translations */
+html:not(.dark) .text-white {
+  color: #04354d !important;
+}
+
+html:not(.dark) .text-slate-200 {
+  color: #04354d !important;
+}
+
+html:not(.dark) .text-slate-300 {
+  color: #055374 !important;
+}
+
+html:not(.dark) .text-slate-400 {
+  color: #0177ab !important;
+}
+
+html:not(.dark) .text-slate-500 {
+  color: #0196d4 !important;
+}
+
+html:not(.dark) .text-slate-600 {
+  color: #00638d !important;
+}
+
+html:not(.dark) .text-slate-700 {
+  color: #00aae1 !important;
+}
+
+html:not(.dark) .text-\[\'\#06b6d4\'\] {
+  color: #0177ab !important;
+}
+
+/* Border Translations */
+html:not(.dark) .border-\[\#1e293b\] {
+  border-color: rgba(0, 170, 225, 0.25) !important;
+}
+
+/* Print stylesheets for Ctrl+P custom export */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-only {
+    display: block !important;
+  }
+  
+  .glass-panel {
+    background: transparent !important;
+    border: 1px solid #cccccc !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .print-page-break {
+    page-break-after: always;
+  }
+}
+
+/* Modal Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleUp {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.18s ease-out forwards;
+}
+
+.animate-scale-up {
+  animation: scaleUp 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}

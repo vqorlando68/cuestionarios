@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Especificación Técnica — Plataforma de Administración y Evaluaciones</title>
+<style>
+  :root{
+    --bg:#fafafa; --surface:#ffffff; --ink:#1a1a1a; --muted:#6b7280;
+    --border:#e5e7eb; --accent:#4f46e5; --accent-soft:#eef2ff;
+    --radius-1:8px; --radius-1:8px; --radius-2:14px;
+    --green:#059669; --amber:#d97706; --red:#dc2626; --blue:#2563eb;
+    --mono: 'SF Mono', 'Roboto Mono', Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif;
+  }
+  [data-theme="dark"]{
+    --bg:#0f1115; --surface:#171a21; --ink:#e7e9ee; --muted:#9aa1ad;
+    --border:#262a33; --accent:#818cf8; --accent-soft:#1e2030;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
+    line-height:1.6; -webkit-font-smoothing:antialiased; transition:background .25s,color .25s;
+  }
+  .layout{display:flex; max-width:1280px; margin:0 auto;}
+  /* Sidebar */
+  nav.toc{
+    width:280px; flex-shrink:0; position:sticky; top:0; height:100vh; overflow-y:auto;
+    padding:32px 20px; border-right:1px solid var(--border);
+  }
+  nav.toc .brand{font-weight:700; font-size:15px; letter-spacing:.02em; margin-bottom:4px;}
+  nav.toc .brand-sub{font-size:12px; color:var(--muted); margin-bottom:24px;}
+  nav.toc a{
+    display:block; font-size:13.5px; color:var(--muted); text-decoration:none;
+    padding:6px 10px; border-radius:8px; margin-bottom:1px;
+  }
+  nav.toc a:hover{background:var(--accent-soft); color:var(--accent);}
+  nav.toc .section-label{
+    font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
+    margin:18px 0 6px 10px; font-weight:600;
+  }
+  /* Main content */
+  main{flex:1; padding:48px 56px 120px; max-width:880px;}
+  header.hero{margin-bottom:48px;}
+  .badge{
+    display:inline-block; font-size:11.5px; font-weight:600; color:var(--accent);
+    background:var(--accent-soft); padding:4px 10px; border-radius:20px; margin-bottom:16px;
+    letter-spacing:.02em;
+  }
+  h1.title{font-size:34px; font-weight:700; margin:0 0 12px; letter-spacing:-0.02em;}
+  .subtitle{font-size:16px; color:var(--muted); margin:0 0 20px; max-width:620px;}
+  .meta-row{display:flex; gap:18px; font-size:13px; color:var(--muted); flex-wrap:wrap;}
+  .meta-row span{display:flex; align-items:center; gap:6px;}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);}
+
+  section{margin-bottom:56px; scroll-margin-top:24px;}
+  h2{
+    font-size:22px; font-weight:700; margin:0 0 6px; letter-spacing:-0.01em;
+    display:flex; align-items:center; gap:10px;
+  }
+  h2 .num{
+    font-family:var(--mono); font-size:13px; color:var(--accent); font-weight:600;
+  }
+  .section-desc{color:var(--muted); font-size:14.5px; margin:0 0 24px; max-width:640px;}
+  h3{font-size:16px; font-weight:600; margin:28px 0 12px;}
+  p{font-size:14.5px; margin:0 0 14px;}
+  ul,ol{font-size:14.5px; padding-left:22px; margin:0 0 16px;}
+  li{margin-bottom:6px;}
+  code{
+    font-family:var(--mono); font-size:12.5px; background:var(--accent-soft);
+    color:var(--accent); padding:2px 6px; border-radius:5px;
+  }
+
+  /* Cards grid */
+  .grid{display:grid; gap:14px; margin:18px 0;}
+  .grid.cols-2{grid-template-columns:1fr 1fr;}
+  .grid.cols-4{grid-template-columns:repeat(4,1fr);}
+  @media (max-width:760px){.grid.cols-2,.grid.cols-4{grid-template-columns:1fr;}}
+
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-2);
+    padding:18px 20px;
+  }
+  .card h4{margin:0 0 6px; font-size:14.5px; font-weight:600; display:flex; align-items:center; gap:8px;}
+  .card p{margin:0; font-size:13px; color:var(--muted);}
+  .icon-dot{
+    width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    font-size:14px; flex-shrink:0;
+  }
+  .icon-radio{background:#eef2ff; color:#4f46e5;}
+  .icon-check{background:#ecfdf5; color:#059669;}
+  .icon-text{background:#fff7ed; color:#d97706;}
+  .icon-assoc{background:#fef2f2; color:#dc2626;}
+  [data-theme="dark"] .icon-radio{background:#1e2030;}
+  [data-theme="dark"] .icon-check{background:#0f2a22;}
+  [data-theme="dark"] .icon-text{background:#2a2110;}
+  [data-theme="dark"] .icon-assoc{background:#2a1414;}
+
+  /* Logic flow diagram */
+  .flow-demo{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-2);
+    padding:32px; margin:20px 0; overflow-x:auto;
+  }
+  .flow-svg{display:block; margin:0 auto;}
+
+  /* Panels mockup */
+  .panel-mock{
+    display:grid; grid-template-columns:1fr 2fr 1fr; gap:0; border:1px solid var(--border);
+    border-radius:var(--radius-2); overflow:hidden; margin:20px 0; min-height:280px;
+  }
+  .panel-col{padding:16px; border-right:1px solid var(--border);}
+  .panel-col:last-child{border-right:none;}
+  .panel-col.center{background:var(--bg);}
+  .panel-title{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:600; margin-bottom:12px;}
+  .lib-item{
+    display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:8px;
+    background:var(--surface); border:1px solid var(--border); font-size:12.5px; margin-bottom:6px;
+  }
+  .canvas-node{
+    background:var(--surface); border:1.5px solid var(--accent); border-radius:10px;
+    padding:10px 12px; font-size:12px; width:fit-content; margin:10px auto; box-shadow:0 2px 6px rgba(0,0,0,.05);
+  }
+  .field-row{margin-bottom:10px;}
+  .field-row label{display:block; font-size:11px; color:var(--muted); margin-bottom:3px;}
+  .field-row .input-mock{
+    border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:12px; background:var(--surface);
+  }
+  @media (max-width:760px){.panel-mock{grid-template-columns:1fr;} .panel-col{border-right:none; border-bottom:1px solid var(--border);}}
+
+  /* Table */
+  table{width:100%; border-collapse:collapse; font-size:13.5px; margin:16px 0;}
+  th,td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--border);}
+  th{color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.03em;}
+  tr:last-child td{border-bottom:none;}
+
+  /* Pills */
+  .pill{
+    display:inline-block; font-size:11.5px; font-weight:600; padding:3px 10px;
+    border-radius:20px; margin:2px 4px 2px 0;
+  }
+  .pill-blue{background:#eff6ff; color:var(--blue);}
+  .pill-green{background:#ecfdf5; color:var(--green);}
+  .pill-amber{background:#fffbeb; color:var(--amber);}
+  .pill-red{background:#fef2f2; color:var(--red);}
+  [data-theme="dark"] .pill-blue{background:#13233f;}
+  [data-theme="dark"] .pill-green{background:#0f2a22;}
+  [data-theme="dark"] .pill-amber{background:#2a2110;}
+  [data-theme="dark"] .pill-red{background:#2a1414;}
+
+  /* Dashboard mock */
+  .stat-card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-2); padding:16px;}
+  .stat-num{font-size:24px; font-weight:700; margin:4px 0;}
+  .stat-label{font-size:12px; color:var(--muted);}
+  .bar-track{height:8px; background:var(--accent-soft); border-radius:4px; overflow:hidden; margin-top:8px;}
+  .bar-fill{height:100%; background:var(--accent); border-radius:4px;}
+
+  /* Theme toggle */
+  .theme-toggle{
+    position:fixed; bottom:24px; right:24px; background:var(--surface); border:1px solid var(--border);
+    border-radius:30px; padding:8px 16px; font-size:13px; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.1);
+    display:flex; align-items:center; gap:8px; z-index:50; color:var(--ink);
+  }
+
+  blockquote{
+    margin:16px 0; padding:12px 16px; border-left:3px solid var(--accent); background:var(--accent-soft);
+    border-radius:0 8px 8px 0; font-size:13.5px; color:var(--ink);
+  }
+
+  @media (max-width:900px){
+    nav.toc{display:none;}
+    main{padding:32px 24px 100px;}
+  }
+</style>
+</head>
+<body data-theme="light">
+
+<div class="layout">
+  <nav class="toc">
+    <div class="brand">Especificación · v1.0</div>
+    <div class="brand-sub">Plataforma de Evaluaciones</div>
+
+    <div class="section-label">Visión</div>
+    <a href="#objetivo">Objetivo del sistema</a>
+
+    <div class="section-label">Funcional</div>
+    <a href="#tipos-preguntas">Tipos de preguntas</a>
+    <a href="#logica">Motor de lógica condicional</a>
+    <a href="#constructor">Constructor visual de flujo</a>
+    <a href="#interfaz">Interfaz de diseño</a>
+    <a href="#gestion">Gestión de cuestionarios</a>
+
+    <div class="section-label">Experiencia</div>
+    <a href="#ux-final">Experiencia del usuario final</a>
+    <a href="#dashboard">Dashboard administrativo</a>
+
+    <div class="section-label">Diseño</div>
+    <a href="#diseno-visual">Diseño visual</a>
+    <a href="#paleta-colores">Paleta de colores</a>
+
+    <div class="section-label">Técnico</div>
+    <a href="#stack-tecnologico">Stack tecnológico</a>
+    <a href="#impresion">Impresión de cuestionarios</a>
+    <a href="#modelo-relacional">Modelo relacional</a>
+  </nav>
+
+  <main>
+
+    <header class="hero" id="top">
+      <div class="badge">DOCUMENTO DE ESPECIFICACIÓN</div>
+      <h1 class="title">Plataforma de Administración y Realización de Evaluaciones</h1>
+      <p class="subtitle">Sistema de cuestionarios dinámicos con lógica condicional, diseñado para usuarios no técnicos mediante una interfaz visual de tipo drag-and-drop. Orientado a encuestas, evaluaciones clínicas, escalas médicas y formularios de admisión complejos.</p>
+      <div class="meta-row">
+        <span><span class="dot"></span>Versión 1.0</span>
+        <span><span class="dot"></span>Junio 2026</span>
+        <span><span class="dot"></span>Tipo: Plataforma SaaS</span>
+      </div>
+    </header>
+
+    <!-- OBJETIVO -->
+    <section id="objetivo">
+      <h2><span class="num">01</span>Objetivo del sistema</h2>
+      <p class="section-desc">Definición del propósito central de la plataforma.</p>
+      <p>El sistema debe permitir a usuarios <strong>no técnicos</strong> diseñar cuestionarios dinámicos mediante una interfaz visual de arrastrar y soltar, donde las preguntas se conectan entre sí mediante reglas de negocio y flujos condicionales — sin necesidad de escribir código ni depender de soporte técnico.</p>
+      <blockquote>Inspiración funcional: combina la simplicidad de Typeform, la potencia lógica de SurveyMonkey Advanced Logic, y la flexibilidad visual de un motor BPM ligero (estilo Miro/Lucidchart).</blockquote>
+    </section>
+
+    <!-- TIPOS DE PREGUNTAS -->
+    <section id="tipos-preguntas">
+      <h2><span class="num">02</span>Tipos de preguntas</h2>
+      <p class="section-desc">Catálogo de componentes de pregunta soportados por el motor de cuestionarios.</p>
+
+      <div class="grid cols-2">
+        <div class="card">
+          <h4><span class="icon-dot icon-radio">●</span>Selección única</h4>
+          <p>Radio buttons. Una sola respuesta posible. Soporte opcional de imágenes o iconos en cada opción.</p>
+        </div>
+        <div class="card">
+          <h4><span class="icon-dot icon-check">☑</span>Selección múltiple</h4>
+          <p>Checkboxes. Varias respuestas posibles, con configuración de mínimo y máximo de opciones seleccionables.</p>
+        </div>
+        <div class="card">
+          <h4><span class="icon-dot icon-text">Aa</span>Preguntas abiertas</h4>
+          <p>Texto corto, texto largo, numéricas, fecha y correo electrónico — cada una con validación de formato propia.</p>
+        </div>
+        <div class="card">
+          <h4><span class="icon-dot icon-assoc">⇄</span>Preguntas asociativas</h4>
+          <p>Relacionar elementos de una columna con otra mediante líneas visuales o listas desplegables, con validación de correspondencias.</p>
+        </div>
+      </div>
+
+      <h3>Detalle por tipo</h3>
+      <table>
+        <tr><th>Tipo</th><th>Variantes</th><th>Validaciones clave</th></tr>
+        <tr><td>Selección única</td><td>Con/sin imagen, layout lista o tarjetas</td><td>Respuesta requerida / opcional</td></tr>
+        <tr><td>Selección múltiple</td><td>Lista, tarjetas, chips</td><td>Mín./máx. de opciones</td></tr>
+        <tr><td>Texto corto / largo</td><td>Placeholder, contador de caracteres</td><td>Longitud mín./máx., regex</td></tr>
+        <tr><td>Numérica</td><td>Entero, decimal, rango</td><td>Valor mín./máx.</td></tr>
+        <tr><td>Fecha</td><td>Fecha única, rango de fechas</td><td>Rango permitido</td></tr>
+        <tr><td>Correo electrónico</td><td>—</td><td>Formato RFC válido</td></tr>
+        <tr><td>Asociativa</td><td>Líneas (drag), dropdown por fila</td><td>Todas las filas asociadas, sin duplicados</td></tr>
+      </table>
+    </section>
+
+    <!-- LOGICA CONDICIONAL -->
+    <section id="logica">
+      <h2><span class="num">03</span>Motor de lógica condicional</h2>
+      <p class="section-desc">Reglas visuales para construir flujos inteligentes entre preguntas.</p>
+
+      <p>El motor debe soportar operadores lógicos completos para construir condiciones simples o compuestas:</p>
+      <p>
+        <span class="pill pill-blue">IF / THEN</span>
+        <span class="pill pill-amber">ELSE</span>
+        <span class="pill pill-green">AND</span>
+        <span class="pill pill-green">OR</span>
+        <span class="pill pill-red">Reglas anidadas</span>
+      </p>
+
+      <h3>Comportamiento esperado</h3>
+      <ul>
+        <li>Si la respuesta a una pregunta cumple una condición, se muestran o se saltan preguntas específicas.</li>
+        <li>Varias rutas pueden <strong>converger</strong> nuevamente en una misma pregunta posterior.</li>
+        <li>Una pregunta puede tener <strong>múltiples caminos de salida</strong> dependiendo de la opción seleccionada.</li>
+        <li>Las reglas pueden anidarse (condiciones dentro de condiciones) y combinarse con AND / OR.</li>
+      </ul>
+
+      <h3>Ejemplo de flujo</h3>
+      <div class="flow-demo">
+        <svg class="flow-svg" viewBox="0 0 700 320" xmlns="http://www.w3.org/2000/svg" width="100%" style="max-width:700px;">
+          <defs>
+            <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 Z" fill="var(--muted)"/>
+            </marker>
+          </defs>
+          <!-- Node 1 -->
+          <rect x="290" y="10" width="160" height="44" rx="10" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/>
+          <text x="370" y="37" text-anchor="middle" font-size="13" fill="var(--ink)" font-family="sans-serif">¿Antecedentes médicos?</text>
+
+          <!-- branch lines -->
+          <path d="M340,54 C300,90 220,90 220,120" fill="none" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arrow)"/>
+          <text x="255" y="95" font-size="11" fill="var(--green)" font-family="sans-serif" font-weight="600">Sí</text>
+
+          <path d="M400,54 C460,90 540,90 540,120" fill="none" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arrow)"/>
+          <text x="500" y="95" font-size="11" fill="var(--red)" font-family="sans-serif" font-weight="600">No</text>
+
+          <!-- Node A -->
+          <rect x="140" y="120" width="160" height="44" rx="10" fill="var(--surface)" stroke="var(--border)" stroke-width="1.5"/>
+          <text x="220" y="147" text-anchor="middle" font-size="12.5" fill="var(--ink)" font-family="sans-serif">Preguntas A, B, C</text>
+
+          <!-- Node D -->
+          <rect x="460" y="120" width="160" height="44" rx="10" fill="var(--surface)" stroke="var(--border)" stroke-width="1.5"/>
+          <text x="540" y="147" text-anchor="middle" font-size="12.5" fill="var(--ink)" font-family="sans-serif">Pregunta D</text>
+
+          <!-- converge lines -->
+          <path d="M220,164 C220,210 370,210 370,240" fill="none" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arrow)"/>
+          <path d="M540,164 C540,210 370,210 370,240" fill="none" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+          <!-- Node 5 -->
+          <rect x="290" y="240" width="160" height="44" rx="10" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/>
+          <text x="370" y="267" text-anchor="middle" font-size="13" fill="var(--ink)" font-family="sans-serif">Pregunta 5 (convergencia)</text>
+        </svg>
+      </div>
+      <p style="text-align:center; color:var(--muted); font-size:13px;">Ambas rutas (Sí / No) convergen nuevamente en la Pregunta 5, evitando duplicación de lógica.</p>
+    </section>
+
+    <!-- CONSTRUCTOR VISUAL -->
+    <section id="constructor">
+      <h2><span class="num">04</span>Constructor visual de flujo</h2>
+      <p class="section-desc">Experiencia de edición tipo canvas, inspirada en Miro, Lucidchart, Typeform Logic Builder y SurveyMonkey Advanced Logic.</p>
+
+      <div class="grid cols-4">
+        <div class="card"><h4>🖱️ Nodos</h4><p>Cada pregunta es un nodo arrastrable en el canvas.</p></div>
+        <div class="card"><h4>🔗 Conexiones</h4><p>Líneas visuales que representan rutas condicionales entre nodos.</p></div>
+        <div class="card"><h4>🔍 Zoom & Pan</h4><p>Navegación libre por flujos extensos.</p></div>
+        <div class="card"><h4>🌳 Vistas</h4><p>Alternar entre vista de árbol y vista de diagrama libre.</p></div>
+      </div>
+
+      <h3>Codificación visual</h3>
+      <p>Colores distintivos por tipo de pregunta para identificación rápida, y validación visual en tiempo real que resalta errores de flujo (nodos huérfanos, ciclos infinitos, rutas sin destino).</p>
+      <p>
+        <span class="pill pill-blue">Selección única</span>
+        <span class="pill pill-green">Selección múltiple</span>
+        <span class="pill pill-amber">Abierta</span>
+        <span class="pill pill-red">Asociativa</span>
+      </p>
+    </section>
+
+    <!-- INTERFAZ DE DISEÑO -->
+    <section id="interfaz">
+      <h2><span class="num">05</span>Interfaz de diseño</h2>
+      <p class="section-desc">Disposición de tres paneles: biblioteca, canvas y configuración.</p>
+
+      <div class="panel-mock">
+        <div class="panel-col">
+          <div class="panel-title">Biblioteca</div>
+          <div class="lib-item">⚪ Selección única</div>
+          <div class="lib-item">☑️ Selección múltiple</div>
+          <div class="lib-item">✏️ Abierta</div>
+          <div class="lib-item">⇄ Asociativa</div>
+        </div>
+        <div class="panel-col center">
+          <div class="panel-title">Canvas</div>
+          <div class="canvas-node">¿Tiene antecedentes médicos?</div>
+          <div class="canvas-node" style="margin-left:60%;">Pregunta 2</div>
+          <div class="canvas-node" style="margin-left:20%;">Pregunta 3</div>
+        </div>
+        <div class="panel-col">
+          <div class="panel-title">Configuración</div>
+          <div class="field-row"><label>Título</label><div class="input-mock">¿Tiene antecedentes...?</div></div>
+          <div class="field-row"><label>Obligatoria</label><div class="input-mock">Sí</div></div>
+          <div class="field-row"><label>Reglas</label><div class="input-mock">2 reglas activas</div></div>
+        </div>
+      </div>
+
+      <table>
+        <tr><th>Panel</th><th>Contenido</th></tr>
+        <tr><td>Izquierdo</td><td>Biblioteca de tipos de pregunta (selección única, múltiple, abierta, asociativa)</td></tr>
+        <tr><td>Central</td><td>Canvas visual para construir el flujo completo del cuestionario</td></tr>
+        <tr><td>Derecho</td><td>Configuración de la pregunta seleccionada: título, descripción, obligatoriedad, opciones, reglas, validaciones, ayudas contextuales</td></tr>
+      </table>
+    </section>
+
+    <!-- GESTION -->
+    <section id="gestion">
+      <h2><span class="num">06</span>Gestión de cuestionarios</h2>
+      <p class="section-desc">Ciclo de vida administrativo de cada cuestionario.</p>
+      <ul>
+        <li>Creación de nuevos cuestionarios desde cero o plantilla</li>
+        <li>Duplicación de cuestionarios existentes</li>
+        <li>Versionamiento con historial de cambios</li>
+        <li>Estados de borrador y publicación</li>
+        <li>Importación y exportación en formato JSON</li>
+      </ul>
+    </section>
+
+    <!-- UX FINAL -->
+    <section id="ux-final">
+      <h2><span class="num">07</span>Experiencia del usuario final</h2>
+      <p class="section-desc">Comportamiento del formulario en tiempo de respuesta.</p>
+      <div class="grid cols-2">
+        <div class="card"><h4>🎯 Relevancia dinámica</h4><p>Solo se muestran las preguntas relevantes según las respuestas previas del usuario.</p></div>
+        <div class="card"><h4>⚡ Tiempo real</h4><p>El flujo se actualiza instantáneamente al responder, sin recargas de página.</p></div>
+        <div class="card"><h4>📊 Progreso</h4><p>Barra de progreso dinámica que refleja el camino lógico recorrido, no solo el número total de preguntas.</p></div>
+        <div class="card"><h4>💾 Guardar y continuar</h4><p>Posibilidad de pausar y reanudar la evaluación más adelante.</p></div>
+      </div>
+      <p>El formulario debe ser completamente <strong>responsive</strong>: móvil, tablet y escritorio.</p>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section id="dashboard">
+      <h2><span class="num">08</span>Dashboard administrativo</h2>
+      <p class="section-desc">Panel de métricas para el análisis de resultados.</p>
+
+      <div class="grid cols-4">
+        <div class="stat-card"><div class="stat-label">Cuestionarios</div><div class="stat-num">128</div></div>
+        <div class="stat-card"><div class="stat-label">Respuestas totales</div><div class="stat-num">9.4K</div></div>
+        <div class="stat-card"><div class="stat-label">Tasa de finalización</div><div class="stat-num">76%</div>
+          <div class="bar-track"><div class="bar-fill" style="width:76%;"></div></div>
+        </div>
+        <div class="stat-card"><div class="stat-label">Tiempo promedio</div><div class="stat-num">4m 12s</div></div>
+      </div>
+
+      <h3>Métricas incluidas</h3>
+      <ul>
+        <li>Total de cuestionarios y de respuestas</li>
+        <li>Tasa de finalización global y por cuestionario</li>
+        <li>Tiempo promedio de respuesta</li>
+        <li>Embudo de abandono (pregunta donde se detienen los usuarios)</li>
+        <li>Estadísticas detalladas por pregunta</li>
+        <li>Exportación de reportes a Excel y PDF</li>
+      </ul>
+    </section>
+
+    <!-- DISEÑO VISUAL -->
+    <section id="diseno-visual">
+      <h2><span class="num">09</span>Diseño visual</h2>
+      <p class="section-desc">Lineamientos de identidad visual y experiencia de marca.</p>
+
+      <p>Estilo moderno tipo SaaS empresarial, con inspiración en:</p>
+      <p>
+        <span class="pill pill-blue">Typeform</span>
+        <span class="pill pill-blue">Notion</span>
+        <span class="pill pill-blue">Airtable</span>
+        <span class="pill pill-blue">Linear</span>
+        <span class="pill pill-blue">Stripe Dashboard</span>
+      </p>
+
+      <h3>Principios visuales</h3>
+      <ul>
+        <li>Diseño minimalista con espacios en blanco generosos</li>
+        <li>Modo claro y modo oscuro (toggle inferior derecho de esta página como referencia)</li>
+        <li>Bordes redondeados consistentes</li>
+        <li>Componentes modernos y reutilizables (sistema de diseño)</li>
+        <li>Animaciones suaves y micro-interacciones</li>
+        <li>Tipografía limpia, jerarquía tipográfica clara</li>
+        <li>Sensación general "premium"</li>
+      </ul>
+    </section>
+
+    <!-- PALETA DE COLORES -->
+    <section id="paleta-colores">
+      <h2><span class="num">10</span>Paleta de colores</h2>
+      <p class="section-desc">Sistema de diseño "Teker Apps" — Glassmorphism + Neón, con transición fluida entre modo claro y oscuro.</p>
+
+      <h3>Colores base por modo</h3>
+      <div class="grid cols-2">
+        <div class="card">
+          <h4>☀️ Modo claro</h4>
+          <p>Fondo general: degradado <code>#effaff → #dff4ff → #b6ecff</code>. Texto principal: <code>#363636</code> / navy oscuro <code>#04354d</code>. Tarjetas: <code>#ffffff</code> translúcido. Bordes: <code>#b6ecff</code> / cian neón <code>rgba(0,170,225,.25)</code>.</p>
+        </div>
+        <div class="card">
+          <h4>🌙 Modo oscuro</h4>
+          <p>Fondo general: <code>#121212</code>. Texto principal: <code>#fafafa</code>. Tarjetas: <code>#1a1a1a</code>. Bordes: <code>#262626</code>.</p>
+        </div>
+      </div>
+
+      <h3>Paleta semántica</h3>
+      <div class="grid cols-4">
+        <div class="card">
+          <div style="width:100%;height:36px;border-radius:8px;background:#ff7a39;margin-bottom:8px;"></div>
+          <h4>Naranja</h4>
+          <p>Primario / acciones fuertes. Claro: <code>#ff7a39</code> · Oscuro: <code>#e95814</code></p>
+        </div>
+        <div class="card">
+          <div style="width:100%;height:36px;border-radius:8px;background:#00aae1;margin-bottom:8px;"></div>
+          <h4>Azul cian</h4>
+          <p>Acento / información. Claro: <code>#00aae1</code> · Oscuro (neón logs): <code>#06b6d4</code></p>
+        </div>
+        <div class="card">
+          <div style="width:100%;height:36px;border-radius:8px;background:#01ae6c;margin-bottom:8px;"></div>
+          <h4>Verde</h4>
+          <p>Éxito / estado OK. Claro: <code>#01ae6c</code> · Neón oscuro: <code>#0fecaa</code></p>
+        </div>
+        <div class="card">
+          <div style="width:100%;height:36px;border-radius:8px;background:hsl(0,84.2%,60.2%);margin-bottom:8px;"></div>
+          <h4>Rojo</h4>
+          <p>Destructivo / error. Claro: <code>hsl(0 84.2% 60.2%)</code> · Oscuro: <code>hsl(0 62.8% 30.6%)</code></p>
+        </div>
+      </div>
+
+      <h3>Glassmorphism (modo claro)</h3>
+      <p>Para el efecto de "vidrio esmerilado" sobre el fondo degradado:</p>
+      <ul>
+        <li>Fondo de tarjeta: <code>rgba(255,255,255,0.60)</code></li>
+        <li>Borde de tarjeta: <code>rgba(0,170,225,0.30)</code></li>
+        <li>Sombra: <code>0 4px 24px rgba(0,170,225,0.10)</code></li>
+        <li>Filtro: <code>backdrop-filter: blur(16px) saturate(180%)</code></li>
+      </ul>
+
+      <h3>Mapeo de traducción claro / oscuro</h3>
+      <p>Reglas de traducción automática cuando se usan clases estáticas de Tailwind de fondo oscuro:</p>
+      <table>
+        <tr><th>Clase oscura</th><th>Equivalente en modo claro</th><th>Uso</th></tr>
+        <tr><td><code>.bg-[#050812]</code></td><td><code>rgba(255,255,255,.85)</code> + blur</td><td>Fondo de modal</td></tr>
+        <tr><td><code>.bg-[#0f172a]</code></td><td><code>#effaff</code></td><td>Fondo del panel principal</td></tr>
+        <tr><td><code>.bg-[#111827]</code></td><td><code>#dff4ff</code></td><td>Cabeceras de tablas</td></tr>
+        <tr><td><code>.bg-[#151c2f]</code></td><td><code>rgba(182,236,255,.30)</code></td><td>Filas activas / seleccionadas</td></tr>
+        <tr><td><code>.text-white</code></td><td><code>#04354d</code></td><td>Texto principal</td></tr>
+        <tr><td><code>.text-slate-400</code></td><td><code>#0177ab</code></td><td>Texto secundario</td></tr>
+        <tr><td><code>.border-[#1e293b]</code></td><td><code>rgba(0,170,225,.25)</code></td><td>Borde cian translúcido</td></tr>
+      </table>
+      <blockquote>La paleta completa, con todas las variables CSS, vive en el archivo de diseño <code>colores.txt</code> y debe implementarse como tokens en <code>globals.css</code> del proyecto.</blockquote>
+    </section>
+
+    <!-- STACK TECNOLÓGICO -->
+    <section id="stack-tecnologico">
+      <h2><span class="num">11</span>Stack tecnológico</h2>
+      <p class="section-desc">Tecnologías definidas para la construcción y despliegue de la plataforma.</p>
+
+      <div class="grid cols-2">
+        <div class="card">
+          <h4>⚛️ Frontend — React</h4>
+          <p>La aplicación (constructor visual, dashboard y vista de cuestionario final) se desarrolla en <strong>React</strong>, consumiendo una capa de API que se comunica con la base de datos Oracle.</p>
+        </div>
+        <div class="card">
+          <h4>🗄️ Backend — Oracle</h4>
+          <p>La persistencia de datos (cuestionarios, preguntas, flujos, reglas, respuestas) se gestiona sobre <strong>Oracle Database</strong>, según el modelo relacional definido en este documento.</p>
+        </div>
+        <div class="card">
+          <h4>▲ Despliegue — Vercel</h4>
+          <p>El frontend React se monta y despliega en <strong>Vercel</strong>. La conexión a Oracle se realiza mediante una capa de API/servicios intermedia, ya que Vercel no expone conexiones directas a bases de datos on-premise.</p>
+        </div>
+        <div class="card">
+          <h4>🔌 Integración</h4>
+          <p>La integración entre el frontend y Oracle se realiza en su totalidad mediante un paquete PL/SQL llamado <code>pkgln_cuestionarios</code>. Todos los parámetros de entrada se envían como un JSON único en el parámetro <code>p_json_entrada</code>, y la respuesta se devuelve como un JSON único en el parámetro de salida <code>p_json_salida</code>.</p>
+          <p style="margin-top:10px;">Para la autenticación se utiliza la función <code>pkgln_seguridad.f_validar_clave</code>, a la que se le pasa el usuario, la clave y <code>p_id_rol = 12</code> (rol Coordinador Médico). Si la función devuelve <code>1</code>, el usuario tiene permiso para ingresar.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- IMPRESIÓN -->
+    <section id="impresion">
+      <h2><span class="num">12</span>Impresión de cuestionarios</h2>
+      <p class="section-desc">Capacidad de generar una versión imprimible de cada cuestionario.</p>
+      <ul>
+        <li>Los cuestionarios deben poder <strong>imprimirse</strong>, tanto en su versión vacía (para diligenciamiento en papel) como con las respuestas ya registradas.</li>
+        <li>La vista de impresión debe ocultar elementos de navegación, botones y controles interactivos, mostrando únicamente preguntas, opciones y resultados.</li>
+        <li>Debe respetar el orden visual definido por el flujo condicional realmente recorrido por el usuario (no todas las preguntas del cuestionario, sino las efectivamente mostradas).</li>
+        <li>Incluir encabezado con nombre del cuestionario, fecha y, cuando aplique, puntaje total y clasificación final.</li>
+        <li>Generación de versión imprimible en PDF como alternativa a la impresión directa del navegador.</li>
+      </ul>
+    </section>
+
+    <!-- MODELO RELACIONAL -->
+    <!-- MODELO RELACIONAL -->
+    <section id="modelo-relacional">
+      <h2><span class="num">13</span>Modelo relacional</h2>
+      <p class="section-desc">Estructura de base de datos Oracle — versión documentada con catálogo de tipos de pregunta, secciones de cuestionario y catálogo de operadores.</p>
+
+      <h3>Diagrama de flujo de datos</h3>
+      <div class="flow-demo">
+        <svg class="flow-svg" viewBox="0 0 700 480" xmlns="http://www.w3.org/2000/svg" width="100%" style="max-width:600px;">
+          <defs>
+            <marker id="arrow2" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 Z" fill="var(--muted)"/>
+            </marker>
+          </defs>
+          <rect x="270" y="10" width="160" height="40" rx="10" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/>
+          <text x="350" y="35" text-anchor="middle" font-size="12.5" fill="var(--ink)" font-family="sans-serif">CUESTIONARIOS</text>
+
+          <path d="M350,50 L350,70" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arrow2)"/>
+          <rect x="270" y="70" width="160" height="38" rx="10" fill="var(--surface)" stroke="var(--border)" stroke-width="1.5"/>
+          <text x="350" y="94" text-anchor="middle" font-size="11.5" fill="var(--ink)" font-family="sans-serif">SECCIONES</text>
+
+          <path d="M350,108 L350,128" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arrow2)"/>
+          <rect x="270" y="128" width="160" height="38" rx="10" fill="var(--surface)" stroke="var(--border)" stroke-width="1.5"/>
+          <text x="350" y="152" text-anchor="middle" font-size="11.5" fill="var(--ink)" font-family="sans-serif">PREGUNTAS</text>
+
+          <path d="M340,166 C300,166 280,166 270,180" stroke="var(--muted)" stroke-width="1.2" fill="none" marker-end="url(#arrow2)"/>
+          <rect x="120" y="180" width="150" height="34" rx="9" fill="var(--surface)" stroke="var(--border)" stroke-width="1.2"/>
+          <text x="195" y="201" text-anchor="middle" font-size="10.5" fill="var(--ink)" font-family="sans-serif">TIPOS_PREGUNTA</text>
+
+          <path d="M310,166 C260,190 220,190 200,214" stroke="var(--muted)" stroke-width="1.2" fill="none" marker-end="url(#arrow2)" opacity="0"/>
+          <path d="M315,166 C260,195 220,210 200,224" stroke="var(--muted)" stroke-width="1.2" fill="none" marker-end="url(#arrow2)"/>
+          <rect x="120" y="224" width="150" height="34" rx="9" fill="var(--surface)" stroke="var(--border)" stroke-width="1.2"/>
+          <text x="195" y="245" text-anchor="middle" font-size="10.5" fill="var(--ink)" font-family="sans-serif">OPCIONES_PREGUNTA</text>
+
+          <path d="M360,166 C420,190 460,190 480,214" stroke="var(--muted)" stroke-width="1.2" fill="none" marker-end="url(#arrow2)"/>
+          <rect x="410" y="180" width="150" height="34" rx="9" fill="var(--surface)" stroke="var(--border)" stroke-width="1.2"/>
+          <text x="485" y="201" text-anchor="middle" font-size="10.5" fill="var(--ink)" font-family="sans-serif">PREGUNTA_ASOCIATIVA</text>
+
+          <path d="M390,166 C440,200 500,210 520,224" stroke="var(--muted)" stroke-width="1.2" fill="none" marker-end="url(#arrow2)"/>
+          <rect x="410" y="224" width="150" height="34" rx="9" fill="var(--surface)" stroke="var(--border)" stroke-width="1.2"/>
+          <text x="485" y="245" text-anchor="middle" font-size="10.5" fill="var(--ink)" font-family="sans-serif">FLUJOS_PREGUNTA</text>
+
+          <path d="M485,258 L485,278" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#arrow2)"/>
+          <rect x="410" y="278" width="150" height="34" rx="9" fill="var(--surface)" stroke="var(--border)" stroke-width="1.2"/>
+          <text x="485" y="299" text-anchor="middle" font-size="10.5" fill="var(--ink)" font-family="sans-serif">REGLAS_FLUJO</text>
+
+          <path d="M195,258 C195,310 350,330 350,330" stroke="var(--muted)" stroke-width="1.2" fill="none" marker-end="url(#arrow2)"/>
+          <path d="M485,312 C485,330 350,330 350,330" stroke="var(--muted)" stroke-width="1.2" fill="none"/>
+          <rect x="270" y="330" width="160" height="38" rx="10" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/>
+          <text x="350" y="354" text-anchor="middle" font-size="11.5" fill="var(--ink)" font-family="sans-serif">CUESTIONARIO_RESPUESTA</text>
+
+          <path d="M350,368 L350,388" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arrow2)"/>
+          <rect x="270" y="388" width="160" height="38" rx="10" fill="var(--surface)" stroke="var(--border)" stroke-width="1.5"/>
+          <text x="350" y="412" text-anchor="middle" font-size="11.5" fill="var(--ink)" font-family="sans-serif">RESPUESTAS</text>
+
+          <path d="M350,426 L350,446" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arrow2)"/>
+          <rect x="270" y="446" width="160" height="0" fill="none"/>
+        </svg>
+        <p style="text-align:center; color:var(--muted); font-size:12.5px;">Cuestionario → Secciones → Preguntas (tipificadas por catálogo) → Opciones / Asociaciones → Flujos y Reglas → Instancia de respuesta → Respuestas → Puntaje / Clasificación</p>
+      </div>
+
+      <h3>Convenciones generales</h3>
+      <ul>
+        <li>Todas las tablas inician con el prefijo <code>tkr_</code>.</li>
+        <li>Llave primaria: columna <code>id NUMBER</code>.</li>
+        <li>Cada tabla tiene su secuencia asociada: <code>&lt;tabla&gt;_seq</code>.</li>
+        <li>Trigger <code>BEFORE INSERT</code> por tabla para asignar la PK automáticamente desde la secuencia.</li>
+        <li>Columna <code>estado</code>: <code>0</code> = Inactivo, <code>1</code> = Activo.</li>
+      </ul>
+
+      <h3>Catálogos</h3>
+
+      <h4 style="margin-top:24px;">1. Tipos de pregunta</h4>
+      <p>Tablas creadas para el sistema de cuestionarios</p>
+      <pre style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; font-size:12px; overflow-x:auto; font-family:var(--mono);">
+
+/*****************************************************************************************
+ SISTEMA DE CUESTIONARIOS DINÁMICOS
+ Autor: ChatGPT
+ Base de datos: Oracle
+ Convenciones:
+ - Todas las tablas inician con tkr_
+ - PK: id NUMBER
+ - Secuencia: <tabla>_seq
+ - Trigger BEFORE INSERT para PK
+ - Estado: 0=Inactivo, 1=Activo
+*****************************************************************************************/
+
+/*==============================================================
+ TABLA: tkr_tipos_pregunta
+==============================================================*/
+CREATE TABLE tkr_tipos_pregunta (
+    id NUMBER PRIMARY KEY,
+    codigo VARCHAR2(50) NOT NULL,
+    nombre VARCHAR2(200) NOT NULL,
+    descripcion VARCHAR2(1000),
+    permite_opciones NUMBER(1),
+    permite_valor NUMBER(1),
+    estado NUMBER(1) DEFAULT 1
+);
+
+COMMENT ON TABLE tkr_tipos_pregunta IS 'Catálogo de tipos de pregunta';
+COMMENT ON COLUMN tkr_tipos_pregunta.codigo IS 'Código único del tipo de pregunta';
+COMMENT ON COLUMN tkr_tipos_pregunta.permite_opciones IS '1=usa opciones, 0=no';
+COMMENT ON COLUMN tkr_tipos_pregunta.permite_valor IS '1=permite puntuación';
+
+/*==============================================================
+ TABLA: tkr_cuestionarios
+==============================================================*/
+CREATE TABLE tkr_cuestionarios (
+    id NUMBER PRIMARY KEY,
+    nombre VARCHAR2(500) NOT NULL,
+    descripcion CLOB,
+    version NUMBER,
+    publicado NUMBER(1),
+    fecha_creacion DATE,
+    fecha_publicacion DATE,
+    estado NUMBER(1)
+);
+
+COMMENT ON TABLE tkr_cuestionarios IS 'Definición principal del cuestionario';
+
+/*==============================================================
+ TABLA: tkr_secciones_cuestionario
+==============================================================*/
+CREATE TABLE tkr_secciones_cuestionario (
+    id NUMBER PRIMARY KEY,
+    id_cuestionario NUMBER NOT NULL,
+    nombre VARCHAR2(300),
+    descripcion VARCHAR2(1000),
+    orden_visual NUMBER,
+    estado NUMBER(1)
+);
+
+COMMENT ON TABLE tkr_secciones_cuestionario IS 'Secciones o páginas del cuestionario';
+
+/*==============================================================
+ TABLA: tkr_preguntas
+==============================================================*/
+CREATE TABLE tkr_preguntas (
+    id NUMBER PRIMARY KEY,
+    id_cuestionario NUMBER NOT NULL,
+    id_seccion_cuestionario NUMBER,
+    id_tipo_pregunta NUMBER NOT NULL,
+    codigo VARCHAR2(100),
+    texto_pregunta CLOB,
+    orden_visual NUMBER,
+    obligatoria NUMBER(1),
+    valor_pregunta NUMBER,
+    permite_otro NUMBER(1),
+    estado NUMBER(1)
+);
+
+COMMENT ON TABLE tkr_preguntas IS 'Preguntas del cuestionario';
+COMMENT ON COLUMN tkr_preguntas.valor_pregunta IS 'Valor base de la pregunta';
+
+/*==============================================================
+ TABLA: tkr_opciones_pregunta
+==============================================================*/
+CREATE TABLE tkr_opciones_pregunta (
+    id NUMBER PRIMARY KEY,
+    id_pregunta NUMBER NOT NULL,
+    texto_opcion VARCHAR2(4000),
+    codigo_opcion VARCHAR2(100),
+    orden_visual NUMBER,
+    valor_opcion NUMBER,
+    estado NUMBER(1)
+);
+
+COMMENT ON TABLE tkr_opciones_pregunta IS 'Opciones de respuesta';
+
+/*==============================================================
+ TABLA: tkr_pregunta_asociativa
+==============================================================*/
+CREATE TABLE tkr_pregunta_asociativa (
+    id NUMBER PRIMARY KEY,
+    id_pregunta NUMBER NOT NULL,
+    item_izquierdo VARCHAR2(1000),
+    item_derecho VARCHAR2(1000),
+    valor_correcto NUMBER,
+    estado NUMBER(1)
+);
+
+/*==============================================================
+ TABLA: tkr_operadores
+==============================================================*/
+CREATE TABLE tkr_operadores (
+    id NUMBER PRIMARY KEY,
+    codigo VARCHAR2(50),
+    descripcion VARCHAR2(500),
+    estado NUMBER(1)
+);
+
+/*==============================================================
+ TABLA: tkr_flujos_pregunta
+==============================================================*/
+CREATE TABLE tkr_flujos_pregunta (
+    id NUMBER PRIMARY KEY,
+    id_pregunta_origen NUMBER NOT NULL,
+    id_opcion_respuesta NUMBER,
+    id_operador NUMBER,
+    valor_comparacion VARCHAR2(4000),
+    id_pregunta_destino NUMBER NOT NULL,
+    prioridad NUMBER,
+    estado NUMBER(1)
+);
+
+COMMENT ON TABLE tkr_flujos_pregunta IS 'Navegación condicional entre preguntas';
+
+/*==============================================================
+ TABLA: tkr_reglas_flujo
+==============================================================*/
+CREATE TABLE tkr_reglas_flujo (
+    id NUMBER PRIMARY KEY,
+    id_flujo_pregunta NUMBER NOT NULL,
+    campo_evaluado VARCHAR2(100),
+    operador VARCHAR2(30),
+    valor_esperado VARCHAR2(4000),
+    agrupador VARCHAR2(10),
+    estado NUMBER(1)
+);
+
+/*==============================================================
+ TABLA: tkr_variables_calculadas
+==============================================================*/
+CREATE TABLE tkr_variables_calculadas (
+    id NUMBER PRIMARY KEY,
+    id_cuestionario NUMBER NOT NULL,
+    codigo_variable VARCHAR2(100),
+    nombre_variable VARCHAR2(500),
+    tipo_variable VARCHAR2(50),
+    formula CLOB,
+    orden_calculo NUMBER,
+    descripcion VARCHAR2(1000),
+    estado NUMBER(1),
+    fecha_creacion DATE
+);
+
+COMMENT ON TABLE tkr_variables_calculadas IS 'Variables derivadas y puntajes';
+
+/*==============================================================
+ TABLA: tkr_variables_calculadas_det
+==============================================================*/
+CREATE TABLE tkr_variables_calculadas_det (
+    id NUMBER PRIMARY KEY,
+    id_variable_calculada NUMBER NOT NULL,
+    tipo_origen VARCHAR2(50),
+    id_pregunta NUMBER,
+    codigo_variable_origen VARCHAR2(100),
+    operador VARCHAR2(20),
+    secuencia NUMBER,
+    estado NUMBER(1)
+);
+
+/*==============================================================
+ TABLAS DE RESPUESTAS
+==============================================================*/
+CREATE TABLE tkr_cuestionario_respuesta (
+    id NUMBER PRIMARY KEY,
+    id_cuestionario NUMBER,
+    id_usuario NUMBER,
+    fecha_inicio DATE,
+    fecha_fin DATE,
+    puntaje_total NUMBER,
+    clasificacion_final VARCHAR2(500),
+    estado NUMBER(1)
+);
+
+CREATE TABLE tkr_respuestas (
+    id NUMBER PRIMARY KEY,
+    id_cuestionario_respuesta NUMBER,
+    id_pregunta NUMBER,
+    respuesta_texto CLOB,
+    respuesta_numero NUMBER,
+    respuesta_fecha DATE,
+    valor_obtenido NUMBER,
+    estado NUMBER(1)
+);
+
+CREATE TABLE tkr_respuesta_opciones (
+    id NUMBER PRIMARY KEY,
+    id_respuesta NUMBER,
+    id_opcion_pregunta NUMBER,
+    valor_obtenido NUMBER,
+    estado NUMBER(1)
+);
+
+CREATE TABLE tkr_resultados_cuestionario (
+    id NUMBER PRIMARY KEY,
+    id_cuestionario NUMBER,
+    puntaje_desde NUMBER,
+    puntaje_hasta NUMBER,
+    nombre_resultado VARCHAR2(500),
+    descripcion CLOB,
+    color VARCHAR2(30),
+    estado NUMBER(1)
+);
+
+ALTER TABLE tkr_secciones_cuestionario ADD CONSTRAINT fk_sec_cuest FOREIGN KEY(id_cuestionario) REFERENCES tkr_cuestionarios(id);
+ALTER TABLE tkr_preguntas ADD CONSTRAINT fk_preg_cuest FOREIGN KEY(id_cuestionario) REFERENCES tkr_cuestionarios(id);
+ALTER TABLE tkr_preguntas ADD CONSTRAINT fk_preg_sec FOREIGN KEY(id_seccion_cuestionario) REFERENCES tkr_secciones_cuestionario(id);
+ALTER TABLE tkr_preguntas ADD CONSTRAINT fk_preg_tipo FOREIGN KEY(id_tipo_pregunta) REFERENCES tkr_tipos_pregunta(id);
+ALTER TABLE tkr_opciones_pregunta ADD CONSTRAINT fk_op_preg FOREIGN KEY(id_pregunta) REFERENCES tkr_preguntas(id);
+
+CREATE SEQUENCE tkr_tipos_pregunta_seq START WITH 1;
+CREATE SEQUENCE tkr_cuestionarios_seq START WITH 1;
+CREATE SEQUENCE tkr_secciones_cuestionario_seq START WITH 1;
+CREATE SEQUENCE tkr_preguntas_seq START WITH 1;
+CREATE SEQUENCE tkr_opciones_pregunta_seq START WITH 1;
+
+CREATE OR REPLACE TRIGGER trg_tkr_tipos_pregunta_bi BEFORE INSERT ON tkr_tipos_pregunta FOR EACH ROW BEGIN IF :NEW.id IS NULL THEN :NEW.id:=tkr_tipos_pregunta_seq.NEXTVAL; END IF; END;
+/
+CREATE OR REPLACE TRIGGER trg_tkr_cuestionarios_bi BEFORE INSERT ON tkr_cuestionarios FOR EACH ROW BEGIN IF :NEW.id IS NULL THEN :NEW.id:=tkr_cuestionarios_seq.NEXTVAL; END IF; END;
+/
+CREATE OR REPLACE TRIGGER trg_tkr_secciones_cuestionario_bi BEFORE INSERT ON tkr_secciones_cuestionario FOR EACH ROW BEGIN IF :NEW.id IS NULL THEN :NEW.id:=tkr_secciones_cuestionario_seq.NEXTVAL; END IF; END;
+/
+CREATE OR REPLACE TRIGGER trg_tkr_preguntas_bi BEFORE INSERT ON tkr_preguntas FOR EACH ROW BEGIN IF :NEW.id IS NULL THEN :NEW.id:=tkr_preguntas_seq.NEXTVAL; END IF; END;
+/
+CREATE OR REPLACE TRIGGER trg_tkr_opciones_pregunta_bi BEFORE INSERT ON tkr_opciones_pregunta FOR EACH ROW BEGIN IF :NEW.id IS NULL THEN :NEW.id:=tkr_opciones_pregunta_seq.NEXTVAL; END IF; END;
+/
+
+INSERT INTO tkr_tipos_pregunta(codigo,nombre,permite_opciones,permite_valor,estado) VALUES ('UNICA','Selección única',1,1,1);
+INSERT INTO tkr_tipos_pregunta(codigo,nombre,permite_opciones,permite_valor,estado) VALUES ('MULTIPLE','Selección múltiple',1,1,1);
+INSERT INTO tkr_tipos_pregunta(codigo,nombre,permite_opciones,permite_valor,estado) VALUES ('ABIERTA', 'Texto abierto',0,0,1);
+INSERT INTO tkr_tipos_pregunta(codigo,nombre,permite_opciones,permite_valor,estado) VALUES ('ASOCIATIVA','Asociativa',1,1,1);
+
+COMMIT;
+
+</pre>
+
+      <blockquote>Este modelo relacional documentado, junto con la integración vía <code>pkgln_cuestionarios</code> y el stack React + Oracle + Vercel, constituye la base técnica completa de la plataforma.</blockquote>
+    </section>
+
+
+  </main>
+</div>
+
+<button class="theme-toggle" onclick="toggleTheme()">🌓 Cambiar tema</button>
+
+<script>
+  function toggleTheme(){
+    const b = document.body;
+    b.setAttribute('data-theme', b.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  }
+  document.querySelectorAll('nav.toc a').forEach(a=>{
+    a.addEventListener('click', e=>{
+      e.preventDefault();
+      const id = a.getAttribute('href').slice(1);
+      document.getElementById(id)?.scrollIntoView({behavior:'smooth'});
+    });
+  });
+</script>
+
+</body>
+</html>
