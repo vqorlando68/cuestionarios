@@ -41,7 +41,7 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
     DBMS_LOB.APPEND(v_clob, '{"success":true,"data":[');
 
     FOR r IN (
-      SELECT c.id, c.nombre, c.descripcion, c.version, c.publicado, c.fecha_creacion, c.fecha_publicacion, c.estado
+      SELECT c.id, c.nombre, c.descripcion, c.version, c.publicado, c.fecha_creacion, c.fecha_publicacion, c.estado, c.id_tipo_cuestionario
       FROM tkr_cuestionarios c
       WHERE c.estado = 1
       ORDER BY c.fecha_creacion DESC
@@ -68,6 +68,7 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
         ',"descripcion":"' || f_escape_json(f_clob_to_str(r.descripcion)) || '"' ||
         ',"version":' || NVL(r.version, 1) ||
         ',"publicado":' || NVL(r.publicado, 0) ||
+        ',"id_tipo_cuestionario":' || NVL(r.id_tipo_cuestionario, 1) ||
         ',"fecha_creacion":"' || TO_CHAR(r.fecha_creacion, 'YYYY-MM-DD"T"HH24:MI:SS') || '"' ||
         ',"fecha_publicacion":' || CASE WHEN r.fecha_publicacion IS NOT NULL THEN '"' || TO_CHAR(r.fecha_publicacion, 'YYYY-MM-DD"T"HH24:MI:SS') || '"' ELSE 'null' END ||
         ',"total_respuestas":' || v_total_respuestas ||
@@ -113,7 +114,7 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
 
     -- Load Questionnaire Metadata
     FOR c IN (
-      SELECT id, nombre, descripcion, version, publicado, fecha_creacion, fecha_publicacion, estado
+      SELECT id, nombre, descripcion, version, publicado, fecha_creacion, fecha_publicacion, estado, id_tipo_cuestionario
       FROM tkr_cuestionarios
       WHERE id = v_id_cuestionario AND estado = 1
     ) LOOP
@@ -124,6 +125,7 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
         ',"descripcion":"' || f_escape_json(f_clob_to_str(c.descripcion)) || '"' ||
         ',"version":' || NVL(c.version, 1) ||
         ',"publicado":' || NVL(c.publicado, 0) ||
+        ',"id_tipo_cuestionario":' || NVL(c.id_tipo_cuestionario, 1) ||
         ',"fecha_creacion":"' || TO_CHAR(c.fecha_creacion, 'YYYY-MM-DD"T"HH24:MI:SS') || '"' ||
         ',"fecha_publicacion":' || CASE WHEN c.fecha_publicacion IS NOT NULL THEN '"' || TO_CHAR(c.fecha_publicacion, 'YYYY-MM-DD"T"HH24:MI:SS') || '"' ELSE 'null' END ||
         ',"secciones":[');
@@ -270,14 +272,14 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
         DBMS_LOB.APPEND(v_clob, ']}');
       END LOOP;
 
+      -- Clinical Variables
       DBMS_LOB.APPEND(v_clob, '],"variables":[');
-
-      -- Calculated variables loop
+      v_primer_var := TRUE;
       FOR v IN (
-        SELECT id, codigo_variable, nombre_variable, tipo_variable, formula, orden_calculo, descripcion
+        SELECT id, codigo, nombre, descripcion, formula_calculo, valor_minimo, valor_maximo, unidad_medida, orden_visual
         FROM tkr_variables_calculadas
         WHERE id_cuestionario = c.id AND estado = 1
-        ORDER BY orden_calculo
+        ORDER BY orden_visual
       ) LOOP
         IF NOT v_primer_var THEN
           DBMS_LOB.APPEND(v_clob, ',');
@@ -285,17 +287,67 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
         v_primer_var := FALSE;
 
         DBMS_LOB.APPEND(v_clob, '{"id":' || v.id ||
-          ',"codigo_variable":"' || f_escape_json(v.codigo_variable) || '"' ||
-          ',"nombre_variable":"' || f_escape_json(v.nombre_variable) || '"' ||
-          ',"tipo_variable":"' || v.tipo_variable || '"' ||
-          ',"formula":"' || f_escape_json(f_clob_to_str(v.formula)) || '"' ||
-          ',"orden_calculo":' || NVL(v.orden_calculo, 0) ||
-          ',"descripcion":"' || f_escape_json(v.descripcion) || '"}');
+          ',"codigo":"' || f_escape_json(v.codigo) || '"' ||
+          ',"nombre":"' || f_escape_json(v.nombre) || '"' ||
+          ',"descripcion":"' || f_escape_json(v.descripcion) || '"' ||
+          ',"formula_calculo":"' || f_escape_json(v.formula_calculo) || '"' ||
+          ',"valor_minimo":' || NVL(TO_CHAR(v.valor_minimo), 'null') ||
+          ',"valor_maximo":' || NVL(TO_CHAR(v.valor_maximo), 'null') ||
+          ',"unidad_medida":"' || f_escape_json(v.unidad_medida) || '"' ||
+          ',"orden_visual":' || v.orden_visual ||
+          ',"preguntas_asociadas":[');
+
+        -- Questions associated detail
+        DECLARE
+          v_primer_det BOOLEAN := TRUE;
+        BEGIN
+          FOR d IN (
+            SELECT id, id_pregunta, peso, orden_visual
+            FROM tkr_variables_calculadas_det
+            WHERE id_variable_calculada = v.id AND estado = 1
+            ORDER BY orden_visual
+          ) LOOP
+            IF NOT v_primer_det THEN
+              DBMS_LOB.APPEND(v_clob, ',');
+            END IF;
+            v_primer_det := FALSE;
+            DBMS_LOB.APPEND(v_clob, '{"id":' || d.id ||
+              ',"id_pregunta":' || d.id_pregunta ||
+              ',"peso":' || d.peso ||
+              ',"orden_visual":' || d.orden_visual || '}');
+          END LOOP;
+        END;
+        DBMS_LOB.APPEND(v_clob, ']}');
+      END LOOP;
+
+      -- Clinical results ranges
+      DBMS_LOB.APPEND(v_clob, '],"resultados_clinicos":[');
+      v_primer_res := TRUE;
+      FOR r IN (
+        SELECT id, nombre_rango, descripcion, valor_minimo, valor_maximo, clasificacion, color_visual, orden_visual, id_variable_calculada
+        FROM tkr_rangos_interpretacion
+        WHERE id_cuestionario = c.id AND estado = 1
+        ORDER BY orden_visual
+      ) LOOP
+        IF NOT v_primer_res THEN
+          DBMS_LOB.APPEND(v_clob, ',');
+        END IF;
+        v_primer_res := FALSE;
+
+        DBMS_LOB.APPEND(v_clob, '{"id":' || r.id ||
+          ',"nombre_rango":"' || f_escape_json(r.nombre_rango) || '"' ||
+          ',"descripcion":"' || f_escape_json(r.descripcion) || '"' ||
+          ',"valor_minimo":' || r.valor_minimo ||
+          ',"valor_maximo":' || r.valor_maximo ||
+          ',"clasificacion":"' || f_escape_json(r.clasificacion) || '"' ||
+          ',"color_visual":"' || f_escape_json(r.color_visual) || '"' ||
+          ',"orden_visual":' || r.orden_visual || 
+          ',"id_variable_calculada":' || NVL(TO_CHAR(r.id_variable_calculada), 'null') || '}');
       END LOOP;
 
       DBMS_LOB.APPEND(v_clob, '],"resultados":[');
 
-      -- Score range results loop
+      -- Score range results loop (general)
       FOR r IN (
         SELECT id, puntaje_desde, puntaje_hasta, nombre_resultado, descripcion, color
         FROM tkr_resultados_cuestionario
@@ -342,6 +394,7 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
     v_descripcion CLOB;
     v_publicado NUMBER(1);
     v_version NUMBER;
+    v_id_tipo_cuestionario NUMBER;
     v_cuest_id NUMBER;
     v_has_responses NUMBER;
 
@@ -351,8 +404,6 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
     v_op_count NUMBER;
     v_assoc_count NUMBER;
     v_flujo_count NUMBER;
-    v_var_count NUMBER;
-    v_res_count NUMBER;
 
     -- Local loop variables
     v_sec_idx NUMBER;
@@ -398,15 +449,6 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
     v_flujo_dest_id NUMBER;
     v_flujo_prioridad NUMBER;
 
-    v_var_idx NUMBER;
-    v_var_id NUMBER;
-    v_var_cod VARCHAR2(100);
-    v_var_nombre VARCHAR2(500);
-    v_var_tipo VARCHAR2(50);
-    v_var_formula CLOB;
-    v_var_orden NUMBER;
-    v_var_desc VARCHAR2(1000);
-
     v_res_idx NUMBER;
     v_res_id NUMBER;
     v_res_desde NUMBER;
@@ -423,9 +465,42 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
     v_regla_esp VARCHAR2(4000);
     v_regla_agrup VARCHAR2(10);
 
+    -- Clinical variables and arrays
+    v_vars_calc JSON_ARRAY_T;
+    v_var_calc JSON_OBJECT_T;
+    v_dets_calc JSON_ARRAY_T;
+    v_det_calc JSON_OBJECT_T;
+    v_rangos_clinicos JSON_ARRAY_T;
+    v_rango_clinico JSON_OBJECT_T;
+    
+    v_var_codigo VARCHAR2(100);
+    v_var_nombre VARCHAR2(200);
+    v_var_desc VARCHAR2(1000);
+    v_var_formula VARCHAR2(1000);
+    v_var_min NUMBER;
+    v_var_max NUMBER;
+    v_var_unidad VARCHAR2(100);
+    v_var_orden NUMBER;
+    
+    v_det_preg_id NUMBER;
+    v_det_peso NUMBER;
+    v_det_orden NUMBER;
+    
+    v_r_nombre VARCHAR2(200);
+    v_r_desc VARCHAR2(1000);
+    v_r_min NUMBER;
+    v_r_max NUMBER;
+    v_r_clasif VARCHAR2(200);
+    v_r_color VARCHAR2(50);
+    v_r_orden NUMBER;
+
     -- Native JSON variables
     v_input_obj JSON_OBJECT_T;
     v_secciones JSON_ARRAY_T;
+
+    -- Question ID Mapping for clinical variable questions detail
+    TYPE t_preg_id_map IS TABLE OF NUMBER INDEX BY PLS_INTEGER;
+    v_preg_id_map t_preg_id_map;
     v_seccion JSON_OBJECT_T;
     v_preguntas JSON_ARRAY_T;
     v_pregunta JSON_OBJECT_T;
@@ -438,9 +513,6 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
     v_flujo JSON_OBJECT_T;
     v_reglas JSON_ARRAY_T;
     v_regla JSON_OBJECT_T;
-    
-    v_variables JSON_ARRAY_T;
-    v_variable JSON_OBJECT_T;
     
     v_resultados JSON_ARRAY_T;
     v_resultado JSON_OBJECT_T;
@@ -462,6 +534,12 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
     v_publicado := NVL(v_input_obj.get_number('publicado'), 0);
     v_version := NVL(v_input_obj.get_number('version'), 1);
 
+    IF v_input_obj.has('id_tipo_cuestionario') AND NOT v_input_obj.get('id_tipo_cuestionario').is_null THEN
+      v_id_tipo_cuestionario := v_input_obj.get_number('id_tipo_cuestionario');
+    ELSE
+      v_id_tipo_cuestionario := 1; -- Default to GENERAL
+    END IF;
+
     IF v_nombre IS NULL THEN
       p_success := 0;
       p_output := '{"success":false,"error":"El nombre del cuestionario es requerido"}';
@@ -476,12 +554,13 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
       WHERE id_cuestionario = v_id;
     END IF;
 
-    -- Always update the existing questionnaire in place (no new version/row created)
+    -- Always update the existing questionnaire in place
     IF v_id IS NOT NULL THEN
         UPDATE tkr_cuestionarios
         SET nombre = v_nombre,
             descripcion = v_descripcion,
             publicado = v_publicado,
+            id_tipo_cuestionario = v_id_tipo_cuestionario,
             fecha_publicacion = CASE WHEN v_publicado = 1 AND publicado = 0 THEN SYSDATE ELSE fecha_publicacion END
         WHERE id = v_id;
         v_cuest_id := v_id;
@@ -502,16 +581,19 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
         );
         DELETE FROM tkr_preguntas WHERE id_cuestionario = v_cuest_id;
         DELETE FROM tkr_secciones_cuestionario WHERE id_cuestionario = v_cuest_id;
+        DELETE FROM tkr_variables_calculadas_det WHERE id_variable_calculada IN (
+          SELECT id FROM tkr_variables_calculadas WHERE id_cuestionario = v_cuest_id
+        );
         DELETE FROM tkr_variables_calculadas WHERE id_cuestionario = v_cuest_id;
         DELETE FROM tkr_resultados_cuestionario WHERE id_cuestionario = v_cuest_id;
+        DELETE FROM tkr_rangos_interpretacion WHERE id_cuestionario = v_cuest_id;
     ELSE
         INSERT INTO tkr_cuestionarios (
-          nombre, descripcion, version, publicado, fecha_creacion, estado
+          nombre, descripcion, version, publicado, id_tipo_cuestionario, fecha_creacion, estado
         ) VALUES (
-          v_nombre, v_descripcion, v_version, v_publicado, SYSDATE, 1
+          v_nombre, v_descripcion, v_version, v_publicado, v_id_tipo_cuestionario, SYSDATE, 1
         ) RETURNING id INTO v_cuest_id;
     END IF;
-
 
     -- Process Sections & Questions
     IF v_input_obj.has('secciones') AND NOT v_input_obj.get('secciones').is_null THEN
@@ -564,6 +646,11 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
           ) VALUES (
             v_cuest_id, v_sec_id, v_preg_tipo_id, v_preg_codigo, v_preg_texto, v_preg_orden, v_preg_oblig, v_preg_valor, v_preg_otro, 1
           ) RETURNING id INTO v_preg_id;
+
+          -- Save mapping from old question ID to new question ID
+          IF v_pregunta.has('id') AND NOT v_pregunta.get('id').is_null THEN
+            v_preg_id_map(v_pregunta.get_number('id')) := v_preg_id;
+          END IF;
 
           -- Process Options of Question
           IF v_pregunta.has('opciones') AND NOT v_pregunta.get('opciones').is_null THEN
@@ -638,7 +725,7 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
         SELECT id INTO v_flujo_dest_id FROM tkr_preguntas WHERE id_cuestionario = v_cuest_id AND codigo = v_flujo_dest_cod;
       EXCEPTION WHEN NO_DATA_FOUND THEN v_flujo_dest_id := NULL; END;
 
-      -- Find option ID (if code specified and origin question is valid)
+      -- Find option ID
       v_flujo_op_id := NULL;
       IF v_flujo_orig_id IS NOT NULL AND v_flujo_op_cod IS NOT NULL THEN
         BEGIN
@@ -652,7 +739,6 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
         BEGIN
           SELECT id INTO v_flujo_oper_id FROM tkr_operadores WHERE codigo = v_flujo_oper_cod;
         EXCEPTION WHEN NO_DATA_FOUND THEN 
-          -- Insert operator dynamically if missing
           INSERT INTO tkr_operadores (codigo, descripcion, estado) VALUES (v_flujo_oper_cod, 'Operador ' || v_flujo_oper_cod, 1) RETURNING id INTO v_flujo_oper_id;
         END;
       END IF;
@@ -688,42 +774,132 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
       END IF;
     END LOOP;
 
-    -- Process Variables Calculadas
+    -- Process Variables Clínicas (calculated variables)
     IF v_input_obj.has('variables') AND NOT v_input_obj.get('variables').is_null THEN
-      v_variables := v_input_obj.get_array('variables');
-      v_var_count := v_variables.get_size;
-    ELSE
-      v_var_count := 0;
-    END IF;
-    
-    FOR v_var_idx IN 0 .. v_var_count - 1 LOOP
-      v_variable := JSON_OBJECT_T(v_variables.get(v_var_idx));
-      v_var_cod := v_variable.get_string('codigo_variable');
-      v_var_nombre := v_variable.get_string('nombre_variable');
-      v_var_tipo := v_variable.get_string('tipo_variable');
-      v_var_formula := v_variable.get_string('formula');
-      v_var_orden := NVL(v_variable.get_number('orden_calculo'), 1);
-      v_var_desc := v_variable.get_string('descripcion');
-
-      IF v_var_cod IS NOT NULL THEN
-        INSERT INTO tkr_variables_calculadas (
-          id_cuestionario, codigo_variable, nombre_variable, tipo_variable, formula, orden_calculo, descripcion, estado, fecha_creacion
-        ) VALUES (
-          v_cuest_id, v_var_cod, v_var_nombre, v_var_tipo, v_var_formula, v_var_orden, v_var_desc, 1, SYSDATE
-        );
+      v_vars_calc := v_input_obj.get_array('variables');
+      IF v_vars_calc IS NOT NULL THEN
+        FOR i IN 0 .. v_vars_calc.get_size - 1 LOOP
+          v_var_calc := JSON_OBJECT_T(v_vars_calc.get(i));
+          v_var_codigo := v_var_calc.get_string('codigo');
+          v_var_nombre := v_var_calc.get_string('nombre');
+          v_var_desc := v_var_calc.get_string('descripcion');
+          v_var_formula := v_var_calc.get_string('formula_calculo');
+          
+          IF v_var_calc.has('valor_minimo') AND NOT v_var_calc.get('valor_minimo').is_null THEN
+            v_var_min := v_var_calc.get_number('valor_minimo');
+          ELSE
+            v_var_min := NULL;
+          END IF;
+          
+          IF v_var_calc.has('valor_maximo') AND NOT v_var_calc.get('valor_maximo').is_null THEN
+            v_var_max := v_var_calc.get_number('valor_maximo');
+          ELSE
+            v_var_max := NULL;
+          END IF;
+          
+          v_var_unidad := v_var_calc.get_string('unidad_medida');
+          v_var_orden := NVL(v_var_calc.get_number('orden_visual'), 1);
+          
+          DECLARE
+            v_new_var_id NUMBER;
+          BEGIN
+            INSERT INTO tkr_variables_calculadas (
+              id_cuestionario, codigo, nombre, descripcion, formula_calculo, valor_minimo, valor_maximo, unidad_medida, orden_visual, estado, fecha_creacion
+            ) VALUES (
+              v_cuest_id, v_var_codigo, v_var_nombre, v_var_desc, v_var_formula, v_var_min, v_var_max, v_var_unidad, v_var_orden, 1, SYSDATE
+            ) RETURNING id INTO v_new_var_id;
+            
+            -- Process detail questions weight
+            IF v_var_calc.has('preguntas_asociadas') AND NOT v_var_calc.get('preguntas_asociadas').is_null THEN
+              v_dets_calc := v_var_calc.get_array('preguntas_asociadas');
+              IF v_dets_calc IS NOT NULL THEN
+                FOR j IN 0 .. v_dets_calc.get_size - 1 LOOP
+                  v_det_calc := JSON_OBJECT_T(v_dets_calc.get(j));
+                  v_det_preg_id := v_det_calc.get_number('id_pregunta');
+                  v_det_peso := NVL(v_det_calc.get_number('peso'), 1);
+                  v_det_orden := NVL(v_det_calc.get_number('orden_visual'), 1);
+                  
+                  -- Map question ID using the mapping array
+                  IF v_preg_id_map.EXISTS(v_det_preg_id) THEN
+                    v_det_preg_id := v_preg_id_map(v_det_preg_id);
+                  END IF;
+                  
+                  INSERT INTO tkr_variables_calculadas_det (
+                    id_variable_calculada, id_pregunta, peso, orden_visual, estado
+                  ) VALUES (
+                    v_new_var_id, v_det_preg_id, v_det_peso, v_det_orden, 1
+                  );
+                END LOOP;
+              END IF;
+            END IF;
+          END;
+        END LOOP;
       END IF;
-    END LOOP;
+    END IF;
 
-    -- Process Resultados Clasificacion
+    -- Process Rangos Clínicos (interpretations)
+    IF v_input_obj.has('resultados_clinicos') AND NOT v_input_obj.get('resultados_clinicos').is_null THEN
+      v_rangos_clinicos := v_input_obj.get_array('resultados_clinicos');
+      IF v_rangos_clinicos IS NOT NULL THEN
+        FOR i IN 0 .. v_rangos_clinicos.get_size - 1 LOOP
+          v_rango_clinico := JSON_OBJECT_T(v_rangos_clinicos.get(i));
+          v_r_nombre := v_rango_clinico.get_string('nombre_rango');
+          v_r_desc := v_rango_clinico.get_string('descripcion');
+          v_r_min := v_rango_clinico.get_number('valor_minimo');
+          v_r_max := v_rango_clinico.get_number('valor_maximo');
+          v_r_clasif := v_rango_clinico.get_string('clasificacion');
+          v_r_color := v_rango_clinico.get_string('color_visual');
+          v_r_orden := NVL(v_rango_clinico.get_number('orden_visual'), 1);
+          
+          -- Resolve id_variable_calculada using code lookup
+          DECLARE
+            v_r_var_id_old NUMBER;
+            v_r_var_id NUMBER := NULL;
+          BEGIN
+            IF v_rango_clinico.has('id_variable_calculada') AND NOT v_rango_clinico.get('id_variable_calculada').is_null THEN
+              v_r_var_id_old := v_rango_clinico.get_number('id_variable_calculada');
+              IF v_r_var_id_old IS NOT NULL AND v_vars_calc IS NOT NULL THEN
+                FOR k IN 0 .. v_vars_calc.get_size - 1 LOOP
+                  DECLARE
+                    v_vc_temp JSON_OBJECT_T := JSON_OBJECT_T(v_vars_calc.get(k));
+                    v_vc_id_temp NUMBER := v_vc_temp.get_number('id');
+                    v_vc_cod_temp VARCHAR2(100) := v_vc_temp.get_string('codigo');
+                  BEGIN
+                    IF v_vc_id_temp = v_r_var_id_old THEN
+                      BEGIN
+                        SELECT id INTO v_r_var_id
+                        FROM tkr_variables_calculadas
+                        WHERE id_cuestionario = v_cuest_id AND codigo = v_vc_cod_temp AND estado = 1;
+                      EXCEPTION WHEN NO_DATA_FOUND THEN
+                        v_r_var_id := NULL;
+                      END;
+                      EXIT;
+                    END IF;
+                  END;
+                END LOOP;
+              END IF;
+            END IF;
+            
+            INSERT INTO tkr_rangos_interpretacion (
+              id_cuestionario, nombre_rango, descripcion, valor_minimo, valor_maximo, clasificacion, color_visual, orden_visual, id_variable_calculada, estado, fecha_creacion
+            ) VALUES (
+              v_cuest_id, v_r_nombre, v_r_desc, v_r_min, v_r_max, v_r_clasif, v_r_color, v_r_orden, v_r_var_id, 1, SYSDATE
+            );
+          END;
+        END LOOP;
+      END IF;
+    END IF;
+
+    -- Process Resultados Clasificacion (general)
     IF v_input_obj.has('resultados') AND NOT v_input_obj.get('resultados').is_null THEN
       v_resultados := v_input_obj.get_array('resultados');
-      v_res_count := v_resultados.get_size;
+      v_res_idx := v_resultados.get_size;
     ELSE
-      v_res_count := 0;
+      v_res_idx := 0;
     END IF;
     
-    FOR v_res_idx IN 0 .. v_res_count - 1 LOOP
-      v_resultado := JSON_OBJECT_T(v_resultados.get(v_res_idx));
+    FOR i IN 0 .. v_res_idx - 1 LOOP
+      v_resultado := JSON_OBJECT_T(v_resultados.get(i));
       v_res_desde := v_resultado.get_number('puntaje_desde');
       v_res_hasta := v_resultado.get_number('puntaje_hasta');
       v_res_nombre := v_resultado.get_string('nombre_resultado');
@@ -820,6 +996,7 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
     v_descripcion CLOB;
     v_orig_nombre VARCHAR2(500);
     v_orig_version NUMBER;
+    v_orig_tipo_cuestionario NUMBER;
     v_new_version NUMBER;
     v_base_nombre VARCHAR2(500);
     v_new_nombre_generated VARCHAR2(500);
@@ -834,8 +1011,9 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
       RETURN;
     END IF;
 
-    -- Retrieve source questionnaire details into variables first
-    SELECT nombre, descripcion, version INTO v_orig_nombre, v_descripcion, v_orig_version
+    -- Retrieve source questionnaire details
+    SELECT nombre, descripcion, version, id_tipo_cuestionario 
+    INTO v_orig_nombre, v_descripcion, v_orig_version, v_orig_tipo_cuestionario
     FROM tkr_cuestionarios
     WHERE id = v_id;
 
@@ -845,9 +1023,9 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
 
     -- Create duplicate questionnaire entry
     INSERT INTO tkr_cuestionarios (
-      nombre, descripcion, version, publicado, fecha_creacion, estado
+      nombre, descripcion, version, publicado, id_tipo_cuestionario, fecha_creacion, estado
     ) VALUES (
-      NVL(v_new_nombre, v_new_nombre_generated), v_descripcion, v_new_version, 0, SYSDATE, 1
+      NVL(v_new_nombre, v_new_nombre_generated), v_descripcion, v_new_version, 0, v_orig_tipo_cuestionario, SYSDATE, 1
     ) RETURNING id INTO v_new_cuest_id;
 
     -- Duplicate sections and maintain association maps
@@ -899,7 +1077,6 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
     END LOOP;
 
     -- Duplicate logical flows and rules
-    -- Recreate flows using lookups based on codes for the newly copied questions/options
     FOR fp IN (
       SELECT f.id, qo.codigo as orig_cod, qd.codigo as dest_cod, op.codigo_opcion as op_cod, f.id_operador, f.valor_comparacion, f.prioridad
       FROM tkr_flujos_pregunta f
@@ -936,15 +1113,80 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
       END;
     END LOOP;
 
-    -- Duplicate calculated variables
-    INSERT INTO tkr_variables_calculadas (
-      id_cuestionario, codigo_variable, nombre_variable, tipo_variable, formula, orden_calculo, descripcion, estado, fecha_creacion
-    )
-    SELECT v_new_cuest_id, codigo_variable, nombre_variable, tipo_variable, formula, orden_calculo, descripcion, 1, SYSDATE
-    FROM tkr_variables_calculadas
-    WHERE id_cuestionario = v_id AND estado = 1;
+    -- Duplicate clinical variables
+    FOR vc IN (
+      SELECT id, codigo, nombre, descripcion, formula_calculo, valor_minimo, valor_maximo, unidad_medida, orden_visual
+      FROM tkr_variables_calculadas
+      WHERE id_cuestionario = v_id AND estado = 1
+    ) LOOP
+      DECLARE
+        v_new_vc_id NUMBER;
+      BEGIN
+        INSERT INTO tkr_variables_calculadas (
+          id_cuestionario, codigo, nombre, descripcion, formula_calculo, valor_minimo, valor_maximo, unidad_medida, orden_visual, estado, fecha_creacion
+        ) VALUES (
+          v_new_cuest_id, vc.codigo, vc.nombre, vc.descripcion, vc.formula_calculo, vc.valor_minimo, vc.valor_maximo, vc.unidad_medida, vc.orden_visual, 1, SYSDATE
+        ) RETURNING id INTO v_new_vc_id;
+        
+        -- Duplicate questions weight detail
+        FOR d IN (
+          SELECT id_pregunta, peso, orden_visual
+          FROM tkr_variables_calculadas_det
+          WHERE id_variable_calculada = vc.id AND estado = 1
+        ) LOOP
+          DECLARE
+            v_orig_q_code VARCHAR2(100);
+            v_new_q_id NUMBER;
+          BEGIN
+            SELECT codigo INTO v_orig_q_code FROM tkr_preguntas WHERE id = d.id_pregunta;
+            SELECT id INTO v_new_q_id FROM tkr_preguntas WHERE id_cuestionario = v_new_cuest_id AND codigo = v_orig_q_code;
+            
+            INSERT INTO tkr_variables_calculadas_det (
+              id_variable_calculada, id_pregunta, peso, orden_visual, estado
+            ) VALUES (
+              v_new_vc_id, v_new_q_id, d.peso, d.orden_visual, 1
+            );
+          EXCEPTION WHEN OTHERS THEN NULL;
+          END;
+        END LOOP;
+      END;
+    END LOOP;
 
-    -- Duplicate results classifications
+    -- Duplicate clinical interpretation ranges
+    FOR ri IN (
+      SELECT id, nombre_rango, descripcion, valor_minimo, valor_maximo, clasificacion, color_visual, orden_visual, id_variable_calculada
+      FROM tkr_rangos_interpretacion
+      WHERE id_cuestionario = v_id AND estado = 1
+    ) LOOP
+      DECLARE
+        v_new_var_id NUMBER := NULL;
+        v_old_var_code VARCHAR2(100) := NULL;
+      BEGIN
+        IF ri.id_variable_calculada IS NOT NULL THEN
+          SELECT codigo INTO v_old_var_code 
+          FROM tkr_variables_calculadas 
+          WHERE id = ri.id_variable_calculada;
+          
+          SELECT id INTO v_new_var_id 
+          FROM tkr_variables_calculadas 
+          WHERE id_cuestionario = v_new_cuest_id AND codigo = v_old_var_code AND estado = 1;
+        END IF;
+        
+        INSERT INTO tkr_rangos_interpretacion (
+          id_cuestionario, nombre_rango, descripcion, valor_minimo, valor_maximo, clasificacion, color_visual, orden_visual, id_variable_calculada, estado, fecha_creacion
+        ) VALUES (
+          v_new_cuest_id, ri.nombre_rango, ri.descripcion, ri.valor_minimo, ri.valor_maximo, ri.clasificacion, ri.color_visual, ri.orden_visual, v_new_var_id, 1, SYSDATE
+        );
+      EXCEPTION WHEN OTHERS THEN
+        INSERT INTO tkr_rangos_interpretacion (
+          id_cuestionario, nombre_rango, descripcion, valor_minimo, valor_maximo, clasificacion, color_visual, orden_visual, id_variable_calculada, estado, fecha_creacion
+        ) VALUES (
+          v_new_cuest_id, ri.nombre_rango, ri.descripcion, ri.valor_minimo, ri.valor_maximo, ri.clasificacion, ri.color_visual, ri.orden_visual, NULL, 1, SYSDATE
+        );
+      END;
+    END LOOP;
+
+    -- Duplicate results classifications (general)
     INSERT INTO tkr_resultados_cuestionario (
       id_cuestionario, puntaje_desde, puntaje_hasta, nombre_resultado, descripcion, color, estado
     )
@@ -1128,9 +1370,13 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
   ) AS
     v_resp_id NUMBER;
     v_cuest_id NUMBER;
+    v_tipo_cuestionario NUMBER;
     v_total_score NUMBER := 0;
     v_clasificacion VARCHAR2(500) := 'Sin Clasificar';
     v_color VARCHAR2(30) := 'grey';
+    
+    v_clob CLOB;
+    v_primer_var BOOLEAN := TRUE;
   BEGIN
     p_success := 1;
     v_resp_id := JSON_VALUE(p_input, '$.id_cuestionario_respuesta' RETURNING NUMBER);
@@ -1141,66 +1387,151 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
       RETURN;
     END IF;
 
-    -- Fetch questionnaire ID
-    SELECT id_cuestionario INTO v_cuest_id 
-    FROM tkr_cuestionario_respuesta 
-    WHERE id = v_resp_id;
+    -- Fetch questionnaire ID and type
+    SELECT cr.id_cuestionario, c.id_tipo_cuestionario 
+    INTO v_cuest_id, v_tipo_cuestionario
+    FROM tkr_cuestionario_respuesta cr
+    JOIN tkr_cuestionarios c ON cr.id_cuestionario = c.id
+    WHERE cr.id = v_resp_id;
 
-    -- 1. Calculate Score from tkr_respuestas (which aggregates valor_obtenido)
-    -- Sum values of responses + option specific values
-    SELECT NVL(SUM(valor_obtenido), 0) INTO v_total_score
-    FROM tkr_respuestas
-    WHERE id_cuestionario_respuesta = v_resp_id;
-
-    -- Also sum values from selected options
-    DECLARE
-      v_opts_score NUMBER;
-    BEGIN
-      SELECT NVL(SUM(ro.valor_obtenido), 0) INTO v_opts_score
-      FROM tkr_respuesta_opciones ro, tkr_respuestas r
-      WHERE ro.id_respuesta = r.id AND r.id_cuestionario_respuesta = v_resp_id;
+    IF v_tipo_cuestionario = 2 THEN
+      -- SALUD_MENTAL clinical evaluation
+      DBMS_LOB.CREATETEMPORARY(v_clob, TRUE);
+      DBMS_LOB.APPEND(v_clob, '{"success":true,"id_cuestionario_respuesta":' || v_resp_id || ',"resultados_clinicos":[');
       
-      v_total_score := v_total_score + v_opts_score;
-    END;
+      DECLARE
+        v_header_score NUMBER := 0;
+        v_header_clasif VARCHAR2(500) := 'Completado';
+        v_header_color VARCHAR2(30) := 'green';
+        v_is_first BOOLEAN := TRUE;
+      BEGIN
+        FOR v IN (
+          SELECT id, codigo, nombre, descripcion, formula_calculo, valor_minimo, valor_maximo
+          FROM tkr_variables_calculadas
+          WHERE id_cuestionario = v_cuest_id AND estado = 1
+          ORDER BY orden_visual
+        ) LOOP
+          DECLARE
+            v_var_score NUMBER := 0;
+            v_clasif VARCHAR2(500) := 'Sin Clasificar';
+            v_color_vis VARCHAR2(30) := 'grey';
+            v_r_desc VARCHAR2(1000) := '';
+          BEGIN
+            -- Clinical math: SUM(valor_obtenido * peso)
+            SELECT NVL(SUM(r.valor_obtenido * d.peso), 0)
+            INTO v_var_score
+            FROM tkr_respuestas r
+            JOIN tkr_variables_calculadas_det d ON r.id_pregunta = d.id_pregunta
+            WHERE r.id_cuestionario_respuesta = v_resp_id
+              AND d.id_variable_calculada = v.id
+              AND r.estado = 1 AND d.estado = 1;
 
-    -- 2. Find Classification range from tkr_resultados_cuestionario
-    BEGIN
-      SELECT nombre_resultado, color
-      INTO v_clasificacion, v_color
-      FROM tkr_resultados_cuestionario
-      WHERE id_cuestionario = v_cuest_id
-        AND v_total_score BETWEEN puntaje_desde AND puntaje_hasta
-        AND estado = 1
-        AND ROWNUM = 1;
-    EXCEPTION
-      WHEN NO_DATA_FOUND THEN
-        -- Fallback: check if we can get closest range
-        BEGIN
-          SELECT nombre_resultado, color INTO v_clasificacion, v_color
-          FROM (
-            SELECT nombre_resultado, color FROM tkr_resultados_cuestionario
-            WHERE id_cuestionario = v_cuest_id AND estado = 1
-            ORDER BY ABS(puntaje_desde - v_total_score)
-          ) WHERE ROWNUM = 1;
-        EXCEPTION WHEN OTHERS THEN
-          v_clasificacion := 'Completado (Puntuación: ' || v_total_score || ')';
-          v_color := 'green';
-        END;
-    END;
+            -- Find corresponding clinical range
+            BEGIN
+              SELECT clasificacion, descripcion, color_visual
+              INTO v_clasif, v_r_desc, v_color_vis
+              FROM tkr_rangos_interpretacion
+              WHERE id_cuestionario = v_cuest_id
+                AND id_variable_calculada = v.id
+                AND v_var_score BETWEEN valor_minimo AND valor_maximo
+                AND estado = 1
+                AND ROWNUM = 1;
+            EXCEPTION
+              WHEN NO_DATA_FOUND THEN
+                v_clasif := 'Completado';
+                v_r_desc := 'Puntaje de variable obtenido';
+                v_color_vis := 'green';
+            END;
 
-    -- Update questionnaire response with scores
-    UPDATE tkr_cuestionario_respuesta
-    SET fecha_fin = SYSDATE,
-        puntaje_total = v_total_score,
-        clasificacion_final = v_clasificacion,
-        estado = 1 -- 1 = Completed
-    WHERE id = v_resp_id;
+            IF v_is_first THEN
+              v_header_score := v_var_score;
+              v_header_clasif := v_clasif;
+              v_header_color := v_color_vis;
+              v_is_first := FALSE;
+            END IF;
 
-    COMMIT;
-    p_output := '{"success":true,"id_cuestionario_respuesta":' || v_resp_id || 
-      ',"puntaje_total":' || v_total_score || 
-      ',"clasificacion_final":"' || f_escape_json(v_clasificacion) || '"' ||
-      ',"color":"' || f_escape_json(v_color) || '"}';
+            IF NOT v_primer_var THEN
+              DBMS_LOB.APPEND(v_clob, ',');
+            END IF;
+            v_primer_var := FALSE;
+
+            DBMS_LOB.APPEND(v_clob, '{"codigo":"' || f_escape_json(v.codigo) || '"' ||
+              ',"nombre":"' || f_escape_json(v.nombre) || '"' ||
+              ',"score":' || v_var_score ||
+              ',"clasificacion":"' || f_escape_json(v_clasif) || '"' ||
+              ',"descripcion":"' || f_escape_json(v_r_desc) || '"' ||
+              ',"color_visual":"' || f_escape_json(v_color_vis) || '"}');
+          END;
+        END LOOP;
+        
+        DBMS_LOB.APPEND(v_clob, ']}');
+        
+        -- Update response header
+        UPDATE tkr_cuestionario_respuesta
+        SET fecha_fin = SYSDATE,
+            puntaje_total = v_header_score,
+            clasificacion_final = v_header_clasif,
+            estado = 1
+        WHERE id = v_resp_id;
+        
+        COMMIT;
+        p_output := v_clob;
+      END;
+    ELSE
+      -- Standard non-clinical questionnaire evaluation
+      -- 1. Calculate Score from tkr_respuestas (which aggregates valor_obtenido)
+      SELECT NVL(SUM(valor_obtenido), 0) INTO v_total_score
+      FROM tkr_respuestas
+      WHERE id_cuestionario_respuesta = v_resp_id;
+
+      -- Also sum values from selected options
+      DECLARE
+        v_opts_score NUMBER;
+      BEGIN
+        SELECT NVL(SUM(ro.valor_obtenido), 0) INTO v_opts_score
+        FROM tkr_respuesta_opciones ro, tkr_respuestas r
+        WHERE ro.id_respuesta = r.id AND r.id_cuestionario_respuesta = v_resp_id;
+        
+        v_total_score := v_total_score + v_opts_score;
+      END;
+
+      -- 2. Find Classification range from tkr_resultados_cuestionario
+      BEGIN
+        SELECT nombre_resultado, color
+        INTO v_clasificacion, v_color
+        FROM tkr_resultados_cuestionario
+        WHERE id_cuestionario = v_cuest_id
+          AND v_total_score BETWEEN puntaje_desde AND puntaje_hasta
+          AND estado = 1
+          AND ROWNUM = 1;
+      EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+          BEGIN
+            SELECT nombre_resultado, color INTO v_clasificacion, v_color
+            FROM (
+              SELECT nombre_resultado, color FROM tkr_resultados_cuestionario
+              WHERE id_cuestionario = v_cuest_id AND estado = 1
+              ORDER BY ABS(puntaje_desde - v_total_score)
+            ) WHERE ROWNUM = 1;
+          EXCEPTION WHEN OTHERS THEN
+            v_clasificacion := 'Completado (Puntuación: ' || v_total_score || ')';
+            v_color := 'green';
+          END;
+      END;
+
+      UPDATE tkr_cuestionario_respuesta
+      SET fecha_fin = SYSDATE,
+          puntaje_total = v_total_score,
+          clasificacion_final = v_clasificacion,
+          estado = 1 -- 1 = Completed
+      WHERE id = v_resp_id;
+
+      COMMIT;
+      p_output := '{"success":true,"id_cuestionario_respuesta":' || v_resp_id || 
+        ',"puntaje_total":' || v_total_score || 
+        ',"clasificacion_final":"' || f_escape_json(v_clasificacion) || '"' ||
+        ',"color":"' || f_escape_json(v_color) || '"}';
+    END IF;
   EXCEPTION
     WHEN OTHERS THEN
       ROLLBACK;
@@ -1234,6 +1565,7 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
     -- Load Questionnaire Response Meta
     FOR rec IN (
       SELECT cr.id, cr.id_cuestionario, c.nombre as cuestionario_nombre, cr.id_usuario, 
+             c.id_tipo_cuestionario,
              TO_CHAR(cr.fecha_inicio, 'YYYY-MM-DD"T"HH24:MI:SS') as fecha_inicio,
              TO_CHAR(cr.fecha_fin, 'YYYY-MM-DD"T"HH24:MI:SS') as fecha_fin,
              cr.puntaje_total, cr.clasificacion_final, cr.estado
@@ -1246,6 +1578,7 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
         ',"id_cuestionario":' || rec.id_cuestionario ||
         ',"cuestionario_nombre":"' || f_escape_json(rec.cuestionario_nombre) || '"' ||
         ',"id_usuario":' || NVL(TO_CHAR(rec.id_usuario), 'null') ||
+        ',"id_tipo_cuestionario":' || NVL(rec.id_tipo_cuestionario, 1) ||
         ',"fecha_inicio":"' || rec.fecha_inicio || '"' ||
         ',"fecha_fin":' || CASE WHEN rec.fecha_fin IS NOT NULL THEN '"' || rec.fecha_fin || '"' ELSE 'null' END ||
         ',"puntaje_total":' || NVL(rec.puntaje_total, 0) ||
@@ -1278,7 +1611,7 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
           ',"opciones_seleccionadas":[');
 
         v_primer_op := TRUE;
-        -- Fetch selected options if applicable
+        -- Fetch selected options
         FOR o IN (
           SELECT ro.id, ro.id_opcion_pregunta, op.texto_opcion, op.codigo_opcion, ro.valor_obtenido
           FROM tkr_respuesta_opciones ro, tkr_opciones_pregunta op
@@ -1299,7 +1632,69 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
         DBMS_LOB.APPEND(v_clob, ']}');
       END LOOP;
 
-      DBMS_LOB.APPEND(v_clob, ']}}');
+      DBMS_LOB.APPEND(v_clob, ']');
+
+      -- Load Clinical Results if SALUD_MENTAL
+      IF rec.id_tipo_cuestionario = 2 THEN
+        DBMS_LOB.APPEND(v_clob, ',"resultados_clinicos":[');
+        DECLARE
+          v_primer_res_clinico BOOLEAN := TRUE;
+        BEGIN
+          FOR v IN (
+            SELECT id, codigo, nombre, descripcion
+            FROM tkr_variables_calculadas
+            WHERE id_cuestionario = rec.id_cuestionario AND estado = 1
+            ORDER BY orden_visual
+          ) LOOP
+            DECLARE
+              v_var_score NUMBER := 0;
+              v_clasif VARCHAR2(500) := 'Sin Clasificar';
+              v_color_vis VARCHAR2(30) := 'grey';
+              v_r_desc VARCHAR2(1000) := '';
+            BEGIN
+              SELECT NVL(SUM(r.valor_obtenido * d.peso), 0)
+              INTO v_var_score
+              FROM tkr_respuestas r
+              JOIN tkr_variables_calculadas_det d ON r.id_pregunta = d.id_pregunta
+              WHERE r.id_cuestionario_respuesta = rec.id
+                AND d.id_variable_calculada = v.id
+                AND r.estado = 1 AND d.estado = 1;
+
+              -- Find corresponding clinical range
+              BEGIN
+                SELECT clasificacion, descripcion, color_visual
+                INTO v_clasif, v_r_desc, v_color_vis
+                FROM tkr_rangos_interpretacion
+                WHERE id_cuestionario = rec.id_cuestionario
+                  AND id_variable_calculada = v.id
+                  AND v_var_score BETWEEN valor_minimo AND valor_maximo
+                  AND estado = 1
+                  AND ROWNUM = 1;
+              EXCEPTION
+                WHEN NO_DATA_FOUND THEN
+                  v_clasif := 'Completado';
+                  v_r_desc := 'Puntaje de variable obtenido';
+                  v_color_vis := 'green';
+              END;
+
+              IF NOT v_primer_res_clinico THEN
+                DBMS_LOB.APPEND(v_clob, ',');
+              END IF;
+              v_primer_res_clinico := FALSE;
+
+              DBMS_LOB.APPEND(v_clob, '{"codigo":"' || f_escape_json(v.codigo) || '"' ||
+                ',"nombre":"' || f_escape_json(v.nombre) || '"' ||
+                ',"score":' || v_var_score ||
+                ',"clasificacion":"' || f_escape_json(v_clasif) || '"' ||
+                ',"descripcion":"' || f_escape_json(v_r_desc) || '"' ||
+                ',"color_visual":"' || f_escape_json(v_color_vis) || '"}');
+            END;
+          END LOOP;
+        END;
+        DBMS_LOB.APPEND(v_clob, ']');
+      END IF;
+
+      DBMS_LOB.APPEND(v_clob, '}}');
     END LOOP;
 
     IF NOT v_resp_encontrada THEN
@@ -1327,6 +1722,10 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
     v_count_multiple NUMBER;
     v_count_abierta NUMBER;
     v_count_asociativa NUMBER;
+    
+    v_cuest_sm_count NUMBER;
+    v_vars_count NUMBER;
+    v_rangos_count NUMBER;
 
     -- Loop variables
     v_primero BOOLEAN := TRUE;
@@ -1350,6 +1749,11 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
     FROM tkr_preguntas p
     JOIN tkr_cuestionarios c ON p.id_cuestionario = c.id
     WHERE p.estado = 1 AND c.estado = 1;
+    
+    -- Clinical Metrics
+    SELECT COUNT(*) INTO v_cuest_sm_count FROM tkr_cuestionarios WHERE id_tipo_cuestionario = 2 AND estado = 1;
+    SELECT COUNT(*) INTO v_vars_count FROM tkr_variables_calculadas WHERE estado = 1;
+    SELECT COUNT(*) INTO v_rangos_count FROM tkr_rangos_interpretacion WHERE estado = 1;
 
     DBMS_LOB.APPEND(v_clob, '{"success":true,"metrics":{' ||
       '"total_cuestionarios":' || v_cuest_count ||
@@ -1358,11 +1762,14 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
       ',"count_multiple":' || v_count_multiple ||
       ',"count_abierta":' || v_count_abierta ||
       ',"count_asociativa":' || v_count_asociativa ||
+      ',"total_cuestionarios_sm":' || v_cuest_sm_count ||
+      ',"total_variables_calculadas":' || v_vars_count ||
+      ',"total_rangos_configurados":' || v_rangos_count ||
       '},"cuestionarios_desglose":[');
 
     -- 2. Breakdown per questionnaire
     FOR c IN (
-      SELECT id, nombre, version, publicado
+      SELECT id, nombre, version, publicado, id_tipo_cuestionario
       FROM tkr_cuestionarios
       WHERE estado = 1
       ORDER BY nombre
@@ -1384,9 +1791,56 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
           ',"nombre":"' || f_escape_json(c.nombre) || '"' ||
           ',"version":' || c.version ||
           ',"publicado":' || c.publicado ||
+          ',"id_tipo_cuestionario":' || NVL(c.id_tipo_cuestionario, 1) ||
           ',"total_preguntas":' || v_c_preg_count || '}');
       END;
     END LOOP;
+
+    DBMS_LOB.APPEND(v_clob, '],"distribucion_clasificaciones":[');
+    
+    -- 3. Distribution of clinical classifications
+    DECLARE
+      v_primer_dist BOOLEAN := TRUE;
+    BEGIN
+      FOR d IN (
+        SELECT cr.clasificacion_final, COUNT(*) as cantidad
+        FROM tkr_cuestionario_respuesta cr
+        JOIN tkr_cuestionarios c ON cr.id_cuestionario = c.id
+        WHERE c.id_tipo_cuestionario = 2 AND cr.estado = 1 AND cr.clasificacion_final IS NOT NULL
+        GROUP BY cr.clasificacion_final
+        ORDER BY cantidad DESC
+      ) LOOP
+        IF NOT v_primer_dist THEN
+          DBMS_LOB.APPEND(v_clob, ',');
+        END IF;
+        v_primer_dist := FALSE;
+        DBMS_LOB.APPEND(v_clob, '{"clasificacion":"' || f_escape_json(d.clasificacion_final) || '","cantidad":' || d.cantidad || '}');
+      END LOOP;
+    END;
+
+    DBMS_LOB.APPEND(v_clob, '],"distribucion_niveles_riesgo":[');
+    
+    -- 4. Distribution of clinical risk levels
+    DECLARE
+      v_primer_riesgo BOOLEAN := TRUE;
+    BEGIN
+      FOR d IN (
+        SELECT ri.nombre_rango, COUNT(*) as cantidad
+        FROM tkr_cuestionario_respuesta cr
+        JOIN tkr_cuestionarios c ON cr.id_cuestionario = c.id
+        JOIN tkr_rangos_interpretacion ri ON ri.id_cuestionario = c.id
+          AND cr.puntaje_total BETWEEN ri.valor_minimo AND ri.valor_maximo
+        WHERE c.id_tipo_cuestionario = 2 AND cr.estado = 1 AND ri.estado = 1
+        GROUP BY ri.nombre_rango
+        ORDER BY cantidad DESC
+      ) LOOP
+        IF NOT v_primer_riesgo THEN
+          DBMS_LOB.APPEND(v_clob, ',');
+        END IF;
+        v_primer_riesgo := FALSE;
+        DBMS_LOB.APPEND(v_clob, '{"rango":"' || f_escape_json(d.nombre_rango) || '","cantidad":' || d.cantidad || '}');
+      END LOOP;
+    END;
 
     DBMS_LOB.APPEND(v_clob, ']}');
     p_output := v_clob;

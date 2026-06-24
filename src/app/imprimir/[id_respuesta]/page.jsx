@@ -540,7 +540,7 @@ export default function ImprimirRespuesta() {
                             )}
                         </div>
 
-                        {(!printBlank && responseDoc && isCompleted) && (
+                        {(!printBlank && responseDoc && isCompleted && parseInt(responseDoc.id_tipo_cuestionario) !== 2) && (
                             <>
                                 <div className="flex justify-between border-b border-slate-200 pb-1.5">
                                     <span className="text-slate-500 uppercase font-bold tracking-wider">{currentT.score}:</span>
@@ -563,6 +563,53 @@ export default function ImprimirRespuesta() {
                         </div>
                     </div>
                 </div>
+
+                {/* Clinical Results Section */}
+                {!printBlank && responseDoc && parseInt(responseDoc.id_tipo_cuestionario) === 2 && (
+                    <div className="mb-8 border border-slate-200 rounded-xl overflow-hidden print:avoid-break">
+                        <div className="bg-slate-100 px-4 py-3 border-b border-slate-200">
+                            <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                                {language === 'es' ? 'Resultados de Evaluación Clínica' : 'Clinical Evaluation Results'}
+                            </h3>
+                        </div>
+                        <table className="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr className="bg-slate-50 border-b border-slate-200">
+                                    <th className="p-3 font-extrabold text-slate-700 uppercase tracking-wider">{language === 'es' ? 'Código' : 'Code'}</th>
+                                    <th className="p-3 font-extrabold text-slate-700 uppercase tracking-wider">{language === 'es' ? 'Variable' : 'Variable'}</th>
+                                    <th className="p-3 font-extrabold text-slate-700 uppercase tracking-wider text-center">{language === 'es' ? 'Puntaje' : 'Score'}</th>
+                                    <th className="p-3 font-extrabold text-slate-700 uppercase tracking-wider">{language === 'es' ? 'Clasificación' : 'Classification'}</th>
+                                    <th className="p-3 font-extrabold text-slate-700 uppercase tracking-wider">{language === 'es' ? 'Descripción' : 'Description'}</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200">
+                                {(responseDoc.resultados_clinicos || []).map((varCli, index) => {
+                                    const colorMapText = {
+                                        green: '#16a34a',
+                                        orange: '#ea580c',
+                                        red: '#dc2626',
+                                        blue: '#2563eb',
+                                        grey: '#64748b'
+                                    };
+                                    const textCol = colorMapText[varCli.color_visual] || '#64748b';
+                                    return (
+                                        <tr key={index} className="hover:bg-slate-50">
+                                            <td className="p-3 font-bold text-slate-500">{varCli.codigo}</td>
+                                            <td className="p-3 font-bold text-slate-800">{varCli.nombre}</td>
+                                            <td className="p-3 font-black text-center text-slate-800">{varCli.score}</td>
+                                            <td className="p-3">
+                                                <span className="font-extrabold px-2 py-0.5 rounded text-[10px] text-white uppercase tracking-wider" style={{ backgroundColor: textCol }}>
+                                                    {varCli.clasificacion}
+                                                </span>
+                                            </td>
+                                            <td className="p-3 text-slate-600 italic leading-snug">{varCli.descripcion}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
 
                 {/* Questions Checklist */}
                 <div className="space-y-8">

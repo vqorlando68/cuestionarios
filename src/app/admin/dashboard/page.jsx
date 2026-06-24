@@ -29,6 +29,9 @@ export default function Dashboard() {
     const [newDesc, setNewDesc] = useState('');
     const [isCreating, setIsCreating] = useState(false);
     const [createError, setCreateError] = useState('');
+    const [newTipo, setNewTipo] = useState(1);
+    const [distribucionClasif, setDistribucionClasif] = useState([]);
+    const [distribucionRiesgo, setDistribucionRiesgo] = useState([]);
 
     // Modal state for blank print
     const [printBlankItem, setPrintBlankItem] = useState(null); // { id, nombre }
@@ -54,7 +57,21 @@ export default function Dashboard() {
                     { name: 'publicado', type: 'NUMBER(1)', required: true, descEs: 'Indicador de publicación (1 = Publicado, 0 = Borrador).', descEn: 'Publication indicator (1 = Published, 0 = Draft).' },
                     { name: 'fecha_creacion', type: 'DATE', required: true, descEs: 'Fecha de creación del cuestionario.', descEn: 'Date when the questionnaire was created.' },
                     { name: 'fecha_publicacion', type: 'DATE', required: false, descEs: 'Fecha de la última publicación.', descEn: 'Date of the last publication.' },
+                    { name: 'id_tipo_cuestionario', type: 'NUMBER (FK)', required: false, descEs: 'ID del tipo de cuestionario asociado en TKR_TIPOS_CUESTIONARIO (ej. 1 = General, 2 = Salud Mental).', descEn: 'ID of the questionnaire type associated in TKR_TIPOS_CUESTIONARIO (e.g. 1 = General, 2 = Mental Health).' },
                     { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado/Inactivo).', descEn: 'Logical status (1 = Active, 0 = Deleted/Inactive).' }
+                ]
+            },
+            tkr_tipos_cuestionario: {
+                type: 'table',
+                name: 'TKR_TIPOS_CUESTIONARIO',
+                descEs: 'Catálogo de clasificación de tipos de cuestionario para habilitar flujos o configuraciones específicas (ej. General, Salud Mental).',
+                descEn: 'Catalog classification of questionnaire types to enable specific flows or configurations (e.g. General, Mental Health).',
+                columns: [
+                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único del tipo de cuestionario.', descEn: 'Unique type identifier.' },
+                    { name: 'codigo', type: 'VARCHAR2(50)', required: true, descEs: 'Código único de identificación (ej. GENERAL, SALUD_MENTAL).', descEn: 'Unique identification code (e.g. GENERAL, SALUD_MENTAL).' },
+                    { name: 'nombre', type: 'VARCHAR2(200)', required: true, descEs: 'Nombre descriptivo del tipo de cuestionario.', descEn: 'Descriptive name of the questionnaire type.' },
+                    { name: 'descripcion', type: 'VARCHAR2(1000)', required: false, descEs: 'Descripción detallada de la finalidad de este tipo.', descEn: 'Detailed description of this type\'s purpose.' },
+                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Inactivo).', descEn: 'Logical status (1 = Active, 0 = Inactive).' }
                 ]
             },
             tkr_secciones_cuestionario: {
@@ -117,6 +134,53 @@ export default function Dashboard() {
                     { name: 'item_derecho', type: 'VARCHAR2(1000)', required: true, descEs: 'Elemento correspondiente de la columna derecha (Columna B).', descEn: 'Corresponding element of the right column (Column B).' },
                     { name: 'valor_correcto', type: 'NUMBER', required: false, descEs: 'Puntaje que se otorga si se relaciona este par correctamente.', descEn: 'Score awarded if this pair is correctly matched.' },
                     { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado).', descEn: 'Logical status (1 = Active, 0 = Deleted).' }
+                ]
+            },
+            tkr_variables_calculadas: {
+                type: 'table',
+                name: 'TKR_VARIABLES_CALCULADAS',
+                descEs: 'Define las variables clínicas, sub-escalas o dimensiones de cálculo para evaluaciones de tipo Salud Mental.',
+                descEn: 'Defines the clinical variables, sub-scales, or calculation dimensions for Mental Health type evaluations.',
+                columns: [
+                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único de la variable calculada.', descEn: 'Unique calculated variable identifier.' },
+                    { name: 'id_cuestionario', type: 'NUMBER (FK)', required: true, descEs: 'ID del cuestionario asociado en TKR_CUESTIONARIOS.', descEn: 'ID of the associated questionnaire in TKR_CUESTIONARIOS.' },
+                    { name: 'codigo', type: 'VARCHAR2(100)', required: true, descEs: 'Código visual corto de la variable (ej. VAR_DEP).', descEn: 'Short visual code of the variable (e.g. VAR_DEP).' },
+                    { name: 'nombre', type: 'VARCHAR2(500)', required: true, descEs: 'Nombre formal o título de la dimensión clínica.', descEn: 'Formal name or title of the clinical dimension.' },
+                    { name: 'descripcion', type: 'VARCHAR2(1000)', required: false, descEs: 'Descripción clínica detallada de lo que mide esta variable.', descEn: 'Detailed clinical description of what this variable measures.' },
+                    { name: 'formula_calculo', type: 'VARCHAR2(1000)', required: false, descEs: 'Fórmula de agregación matemática (por defecto: SUM).', descEn: 'Mathematical aggregation formula (default: SUM).' },
+                    { name: 'orden_visual', type: 'NUMBER', required: true, descEs: 'Posición de ordenamiento en los resultados clínicos.', descEn: 'Sorting order position in clinical results.' },
+                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado).', descEn: 'Logical status (1 = Active, 0 = Deleted).' }
+                ]
+            },
+            tkr_variables_calculadas_det: {
+                type: 'table',
+                name: 'TKR_VARIABLES_CALCULADAS_DET',
+                descEs: 'Detalle asociativo de las preguntas y ponderaciones (pesos) asignadas para el cálculo de cada variable clínica.',
+                descEn: 'Associative details of the questions and weights assigned for the calculation of each clinical variable.',
+                columns: [
+                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único de la regla.', descEn: 'Unique detail rule identifier.' },
+                    { name: 'id_variable_calculada', type: 'NUMBER (FK)', required: true, descEs: 'ID de la variable cabecera en TKR_VARIABLES_CALCULADAS.', descEn: 'ID of the header variable in TKR_VARIABLES_CALCULADAS.' },
+                    { name: 'id_pregunta', type: 'NUMBER (FK)', required: true, descEs: 'ID de la pregunta de TKR_PREGUNTAS asociada a la variable.', descEn: 'ID of the question from TKR_PREGUNTAS associated with the variable.' },
+                    { name: 'peso', type: 'NUMBER', required: true, descEs: 'Ponderador o coeficiente multiplicador aplicado al valor de la respuesta (ej. 1, 1.5, -2).', descEn: 'Weight or multiplier coefficient applied to the answer value (e.g. 1, 1.5, -2).' },
+                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado).', descEn: 'Logical status (1 = Active, 0 = Deleted).' }
+                ]
+            },
+            tkr_rangos_interpretacion: {
+                type: 'table',
+                name: 'TKR_RANGOS_INTERPRETACION',
+                descEs: 'Define los rangos de interpretación específicos que se asocian a las puntuaciones obtenidas en las variables clínicas.',
+                descEn: 'Defines the specific interpretation ranges associated with scores obtained in clinical variables.',
+                columns: [
+                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único del rango.', descEn: 'Unique range identifier.' },
+                    { name: 'id_cuestionario', type: 'NUMBER (FK)', required: true, descEs: 'ID del cuestionario relacionado.', descEn: 'ID of the related questionnaire.' },
+                    { name: 'id_variable_calculada', type: 'NUMBER (FK)', required: false, descEs: 'ID de la variable calculada asociada en TKR_VARIABLES_CALCULADAS (ej. DEPRESION_TOTAL).', descEn: 'ID of the associated calculated variable in TKR_VARIABLES_CALCULADAS (e.g. DEPRESION_TOTAL).' },
+                    { name: 'valor_minimo', type: 'NUMBER', required: true, descEs: 'Límite de puntaje mínimo inclusivo para este rango.', descEn: 'Inclusive minimum score limit for this range.' },
+                    { name: 'valor_maximo', type: 'NUMBER', required: true, descEs: 'Límite de puntaje máximo inclusivo para este rango.', descEn: 'Inclusive maximum score limit for this range.' },
+                    { name: 'clasificacion', type: 'VARCHAR2(500)', required: true, descEs: 'Clasificación o etiqueta de interpretación clínica (ej. Leve, Severa).', descEn: 'Clinical interpretation classification or tag (e.g. Mild, Severe).' },
+                    { name: 'descripcion', type: 'VARCHAR2(1000)', required: false, descEs: 'Explicación detallada del significado clínico de este rango y recomendaciones.', descEn: 'Detailed explanation of the clinical meaning of this range and recommendations.' },
+                    { name: 'color_visual', type: 'VARCHAR2(100)', required: true, descEs: 'Color semántico utilizado para el badge de resultados (green, orange, red, blue, grey).', descEn: 'Semantic color used for the result badge (green, orange, red, blue, grey).' },
+                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado).', descEn: 'Logical status (1 = Active, 0 = Deleted).' },
+                    { name: 'nombre_rango', type: 'VARCHAR2(500)', required: true, descEs: 'Título o identificador corto del rango de interpretación.', descEn: 'Title or short identifier of the interpretation range.' }
                 ]
             },
             tkr_cuestionario_respuesta: {
@@ -205,6 +269,29 @@ SELECT
 FROM tkr_preguntas p
 JOIN tkr_cuestionarios c ON p.id_cuestionario = c.id
 WHERE p.estado = 1 AND c.estado = 1;`
+                    },
+                    {
+                        titleEs: '4. Cuestionarios Clínicos (Salud Mental) Activos',
+                        titleEn: '4. Active Clinical Questionnaires (Mental Health)',
+                        descEs: 'Cuenta los cuestionarios activos configurados como clínicos de Salud Mental (id_tipo_cuestionario = 2).',
+                        descEn: 'Counts active questionnaires configured as clinical of Mental Health (id_tipo_cuestionario = 2).',
+                        code: `-- Cuestionarios de salud mental activos
+SELECT COUNT(*) AS total_clinicos 
+FROM tkr_cuestionarios 
+WHERE estado = 1 AND id_tipo_cuestionario = 2;`
+                    },
+                    {
+                        titleEs: '5. Desglose de Respuestas Clínicas por Clasificación',
+                        titleEn: '5. Clinical Answers Breakdown by Classification',
+                        descEs: 'Agrupa las evaluaciones clínicas completadas según su clasificación final registrada para cuestionarios clínicos.',
+                        descEn: 'Groups completed clinical evaluations by their registered final classification for clinical questionnaires.',
+                        code: `-- Desglose de clasificaciones clínicas de salud mental
+SELECT clasificacion_final, COUNT(*) AS cantidad
+FROM tkr_cuestionario_respuesta cr
+JOIN tkr_cuestionarios c ON cr.id_cuestionario = c.id
+WHERE cr.estado = 1 AND c.id_tipo_cuestionario = 2
+GROUP BY clasificacion_final
+ORDER BY cantidad DESC;`
                     }
                 ]
             },
@@ -598,6 +685,8 @@ WHERE id_cuestionario = :id_cuestionario AND estado = 1;`
             if (stats && stats.success) {
                 setMetrics(stats.metrics);
                 setBreakdown(stats.cuestionarios_desglose || []);
+                setDistribucionClasif(stats.distribucion_clasificaciones || []);
+                setDistribucionRiesgo(stats.distribucion_niveles_riesgo || []);
             }
         } catch (e) {
             console.error(e);
@@ -683,6 +772,7 @@ WHERE id_cuestionario = :id_cuestionario AND estado = 1;`
         const initialData = {
             nombre: newNombre.trim(),
             descripcion: newDesc.trim(),
+            id_tipo_cuestionario: newTipo,
             version: 1,
             publicado: 0,
             secciones: [],
@@ -842,6 +932,53 @@ WHERE id_cuestionario = :id_cuestionario AND estado = 1;`
                     </div>
                 </div>
 
+                {/* Clinical Metrics Row */}
+                {!loadingStats && metrics.total_cuestionarios_sm > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="glass-panel p-5 border-[#c084fc]/30 dark:border-[#c084fc]/20 flex items-center justify-between bg-purple-500/5">
+                            <div>
+                                <span className="text-[10px] font-extrabold text-purple-450 dark:text-purple-400 uppercase tracking-wider">
+                                    {language === 'es' ? 'Cuestionarios Clínicos' : 'Clinical Questionnaires'}
+                                </span>
+                                <h3 className="text-2xl font-extrabold text-white dark:text-[#fafafa] mt-1.5">
+                                    {metrics.total_cuestionarios_sm}
+                                </h3>
+                            </div>
+                            <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-450 dark:text-purple-355 text-lg font-bold">
+                                🧠
+                            </div>
+                        </div>
+
+                        <div className="glass-panel p-5 border-[#c084fc]/30 dark:border-[#c084fc]/20 flex items-center justify-between bg-purple-500/5">
+                            <div>
+                                <span className="text-[10px] font-extrabold text-purple-450 dark:text-purple-400 uppercase tracking-wider">
+                                    {language === 'es' ? 'Variables Clínicas' : 'Clinical Variables'}
+                                </span>
+                                <h3 className="text-2xl font-extrabold text-white dark:text-[#fafafa] mt-1.5">
+                                    {metrics.total_variables_calculadas}
+                                </h3>
+                            </div>
+                            <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-450 dark:text-purple-355 text-lg font-bold">
+                                ⚗️
+                            </div>
+                        </div>
+
+                        <div className="glass-panel p-5 border-[#c084fc]/30 dark:border-[#c084fc]/20 flex items-center justify-between bg-purple-500/5">
+                            <div>
+                                <span className="text-[10px] font-extrabold text-purple-450 dark:text-purple-400 uppercase tracking-wider">
+                                    {language === 'es' ? 'Rangos Clínicos' : 'Clinical Ranges'}
+                                </span>
+                                <h3 className="text-2xl font-extrabold text-white dark:text-[#fafafa] mt-1.5">
+                                    {metrics.total_rangos_configurados}
+                                </h3>
+                            </div>
+                            <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-450 dark:text-purple-355 text-lg font-bold">
+                                📊
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Dashboard Main Layout (Tables) */}
                 <div className="w-full">
                     
@@ -871,6 +1008,7 @@ WHERE id_cuestionario = :id_cuestionario AND estado = 1;`
                                 <thead>
                                     <tr className="text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                                         <th className="py-3 px-4">{t('name')}</th>
+                                        <th className="py-3 px-4 text-center">{language === 'es' ? 'Tipo' : 'Type'}</th>
                                         <th className="py-3 px-4 text-center">{t('version')}</th>
                                         <th className="py-3 px-4 text-center">Estado</th>
                                         <th className="py-3 px-4 text-center">{language === 'es' ? 'Preguntas' : 'Questions'}</th>
@@ -895,6 +1033,15 @@ WHERE id_cuestionario = :id_cuestionario AND estado = 1;`
                                             <tr key={item.id} className="hover:bg-slate-200/20 dark:hover:bg-white/5 transition-all">
                                                 <td className="py-3.5 px-4">
                                                     <span className="font-semibold text-white dark:text-[#fafafa]">{item.nombre}</span>
+                                                </td>
+                                                <td className="py-3.5 px-4 text-center">
+                                                    <span className={`inline-block text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full ${
+                                                        item.id_tipo_cuestionario === 2 
+                                                            ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' 
+                                                            : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                                     }`}>
+                                                        {item.id_tipo_cuestionario === 2 ? (language === 'es' ? 'Salud Mental' : 'Mental Health') : (language === 'es' ? 'General' : 'General')}
+                                                    </span>
                                                 </td>
                                                 <td className="py-3.5 px-4 text-center text-xs font-semibold text-slate-400">
                                                     {item.version}
@@ -982,6 +1129,85 @@ WHERE id_cuestionario = :id_cuestionario AND estado = 1;`
                             </table>
                         </div>
                     </div>
+
+                    {/* Clinical Analytics Section */}
+                    {!loadingStats && metrics.total_cuestionarios_sm > 0 && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                            {/* Distribución por Clasificación */}
+                            <div className="glass-panel p-6 border-[#b6ecff]/30 dark:border-[#262626] flex flex-col bg-[#effaff]/30 dark:bg-purple-500/5">
+                                <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-450 dark:text-slate-400 mb-4 flex items-center gap-2">
+                                    📊 {language === 'es' ? 'Distribución de Diagnósticos' : 'Diagnostics Distribution'}
+                                </h3>
+                                {distribucionClasif.length === 0 ? (
+                                    <p className="text-xs text-slate-400 py-8 text-center my-auto">
+                                        {language === 'es' ? 'No hay clasificaciones calculadas aún' : 'No classifications calculated yet'}
+                                    </p>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {distribucionClasif.map((item, idx) => {
+                                            const total = distribucionClasif.reduce((sum, d) => sum + d.cantidad, 0);
+                                            const pct = total > 0 ? Math.round((item.cantidad / total) * 100) : 0;
+                                            return (
+                                                <div key={idx} className="space-y-1.5">
+                                                    <div className="flex justify-between text-xs font-semibold text-slate-600 dark:text-slate-350">
+                                                        <span>{item.clasificacion}</span>
+                                                        <span>{item.cantidad} ({pct}%)</span>
+                                                    </div>
+                                                    <div className="w-full bg-slate-700/30 rounded-full h-2">
+                                                        <div 
+                                                            className="bg-gradient-to-r from-purple-500 to-indigo-500 h-2 rounded-full" 
+                                                            style={{ width: `${pct}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Distribución por Nivel de Riesgo */}
+                            <div className="glass-panel p-6 border-[#b6ecff]/30 dark:border-[#262626] flex flex-col bg-[#effaff]/30 dark:bg-purple-500/5">
+                                <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-450 dark:text-slate-400 mb-4 flex items-center gap-2">
+                                    ⚠️ {language === 'es' ? 'Distribución por Nivel de Riesgo' : 'Risk Level Distribution'}
+                                </h3>
+                                {distribucionRiesgo.length === 0 ? (
+                                    <p className="text-xs text-slate-400 py-8 text-center my-auto">
+                                        {language === 'es' ? 'No hay datos de niveles de riesgo aún' : 'No risk level data yet'}
+                                    </p>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {distribucionRiesgo.map((item, idx) => {
+                                            const total = distribucionRiesgo.reduce((sum, d) => sum + d.cantidad, 0);
+                                            const pct = total > 0 ? Math.round((item.cantidad / total) * 100) : 0;
+                                            let barColor = 'from-emerald-500 to-teal-500';
+                                            if (/grave|severo|alto|high|severe/i.test(item.rango)) {
+                                                barColor = 'from-red-500 to-rose-500';
+                                            } else if (/moderado|medio|moderate|medium/i.test(item.rango)) {
+                                                barColor = 'from-amber-500 to-orange-500';
+                                            } else if (/leve|bajo|mild|low/i.test(item.rango)) {
+                                                barColor = 'from-blue-500 to-cyan-500';
+                                            }
+                                            return (
+                                                <div key={idx} className="space-y-1.5">
+                                                    <div className="flex justify-between text-xs font-semibold text-slate-650 dark:text-slate-350">
+                                                        <span>{item.rango}</span>
+                                                        <span>{item.cantidad} ({pct}%)</span>
+                                                    </div>
+                                                    <div className="w-full bg-slate-700/30 rounded-full h-2">
+                                                        <div 
+                                                            className={`bg-gradient-to-r ${barColor} h-2 rounded-full`} 
+                                                            style={{ width: `${pct}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </main>
 
@@ -998,6 +1224,7 @@ WHERE id_cuestionario = :id_cuestionario AND estado = 1;`
                                     setShowCreateModal(false);
                                     setNewNombre('');
                                     setNewDesc('');
+                                    setNewTipo(1);
                                     setCreateError('');
                                 }}
                                 className="text-slate-650 dark:text-slate-400 hover:text-red-500 text-lg font-semibold transition-all"
@@ -1040,6 +1267,24 @@ WHERE id_cuestionario = :id_cuestionario AND estado = 1;`
                                 />
                             </div>
 
+                            <div>
+                                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-350 mb-1.5">
+                                    {language === 'es' ? 'Tipo de Cuestionario' : 'Questionnaire Type'}
+                                </label>
+                                <select
+                                    value={newTipo}
+                                    onChange={(e) => setNewTipo(parseInt(e.target.value))}
+                                    className="w-full px-4 py-2.5 rounded-lg bg-white/45 dark:bg-[#05141e]/50 border border-[#b6ecff] dark:border-[#06b6d4]/20 text-[#04354d] dark:text-[#fafafa] focus:outline-none focus:border-[#00aae1] focus:ring-1 focus:ring-[#00aae1] transition-all text-sm font-medium"
+                                >
+                                    <option value={1} className="bg-slate-100 dark:bg-[#0c1a24] text-slate-800 dark:text-[#fafafa]">
+                                        {language === 'es' ? 'General' : 'General'}
+                                    </option>
+                                    <option value={2} className="bg-slate-100 dark:bg-[#0c1a24] text-slate-800 dark:text-[#fafafa]">
+                                        {language === 'es' ? 'Salud Mental (Clínico)' : 'Mental Health (Clinical)'}
+                                    </option>
+                                </select>
+                            </div>
+
                             <div className="flex gap-2 justify-end pt-2">
                                 <button
                                     type="button"
@@ -1047,6 +1292,7 @@ WHERE id_cuestionario = :id_cuestionario AND estado = 1;`
                                         setShowCreateModal(false);
                                         setNewNombre('');
                                         setNewDesc('');
+                                        setNewTipo(1);
                                         setCreateError('');
                                     }}
                                     className="px-4 py-2 rounded-lg border border-[#b6ecff] dark:border-[#06b6d4]/20 hover:border-red-500 hover:text-red-500 text-slate-700 dark:text-slate-200 text-xs font-bold uppercase transition-all"

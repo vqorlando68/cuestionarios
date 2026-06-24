@@ -258,7 +258,8 @@ export default function Responder() {
                 fecha: new Date().toISOString(),
                 puntaje_total: resultData?.puntaje_total ?? null,
                 clasificacion_final: resultData?.clasificacion_final ?? null,
-                color: resultData?.color ?? null
+                color: resultData?.color ?? null,
+                resultados_clinicos: resultData?.resultados_clinicos ?? null
             },
             respuestas: formatted.map(ans => {
                 const q = allQuestions.find(curr => curr.id === ans.id_pregunta);
@@ -359,6 +360,7 @@ export default function Responder() {
             grey: 'bg-slate-500/10 text-slate-400 border border-slate-500/20'
         };
 
+        const isClinical = parseInt(cuestionario.id_tipo_cuestionario) === 2;
         // Determine if this questionnaire has meaningful scoring:
         // Only show score/classification when result ranges were actually configured
         const hasScore = Array.isArray(cuestionario.resultados) && cuestionario.resultados.length > 0;
@@ -368,7 +370,7 @@ export default function Responder() {
                 <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-cyan-500/10 blur-[120px]" />
                 <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-orange-500/10 blur-[120px]" />
 
-                <div className="w-full max-w-md glass-panel p-8 text-center space-y-6 shadow-2xl animate-fade-in relative z-10 border-[#b6ecff] dark:border-[#262626]">
+                <div className={`w-full ${isClinical ? 'max-w-3xl' : 'max-w-md'} glass-panel p-8 text-center space-y-6 shadow-2xl animate-fade-in relative z-10 border-[#b6ecff] dark:border-[#262626]`}>
                     
                     <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto text-green-500 text-3xl shadow-lg border border-green-500/20 animate-bounce">
                         ✓
@@ -383,26 +385,100 @@ export default function Responder() {
                         </p>
                     </div>
 
-                    {/* Only show score/classification when questionnaire has scoring */}
-                    {hasScore && (
-                        <div className={`p-6 rounded-2xl ${colorMap[resultData.color] || colorMap.grey} shadow-lg transition-all`}>
-                            {(resultData.puntaje_total !== null && resultData.puntaje_total !== undefined) && (
-                                <>
-                                    <span className="text-[10px] font-extrabold uppercase tracking-widest block opacity-70 mb-1">{t('score')}</span>
-                                    <h3 className="text-4xl font-black mb-4">
-                                        {resultData.puntaje_total}
-                                    </h3>
-                                </>
-                            )}
-                            {resultData.clasificacion_final && resultData.clasificacion_final.trim() !== '' && (
-                                <>
-                                    <span className="text-[10px] font-extrabold uppercase tracking-widest block opacity-70 mb-1">{t('classification')}</span>
-                                    <p className="text-lg font-extrabold tracking-tight">
-                                        {resultData.clasificacion_final}
-                                    </p>
-                                </>
-                            )}
+                    {/* Conditional rendering for clinical results */}
+                    {isClinical ? (
+                        <div className="space-y-6 text-left">
+                            <h3 className="text-xs font-black uppercase tracking-widest text-[#ff7a39] mb-3 text-center">
+                                {language === 'es' ? 'Resultados de Evaluación Clínica' : 'Clinical Evaluation Results'}
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {(resultData.resultados_clinicos || []).map((varCli, index) => {
+                                    const cardBgColorClass = colorMap[varCli.color_visual] || colorMap.grey;
+                                    return (
+                                        <div key={index} className={`p-4 rounded-xl border ${cardBgColorClass} shadow-md flex flex-col justify-between space-y-3`}>
+                                            <div>
+                                                <span className="text-[9px] font-black uppercase tracking-widest opacity-60 block">{varCli.codigo}</span>
+                                                <h4 className="text-sm font-bold text-white leading-tight">{varCli.nombre}</h4>
+                                            </div>
+                                            <div className="flex items-baseline justify-between mt-2">
+                                                <span className="text-2xl font-black">{varCli.score} <span className="text-xs font-semibold opacity-70">pts</span></span>
+                                                <span className="text-xs font-extrabold px-2.5 py-1 rounded-full bg-white/20 uppercase tracking-wider">{varCli.clasificacion}</span>
+                                            </div>
+                                            {varCli.descripcion && (
+                                                <p className="text-[11px] opacity-80 mt-1 italic leading-snug border-t border-white/10 pt-2">
+                                                    {varCli.descripcion}
+                                                </p>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Summary Table */}
+                            <div className="space-y-2 mt-4">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-[#00aae1] block">
+                                    {language === 'es' ? 'Resumen de Variables' : 'Variables Summary'}
+                                </span>
+                                <div className="overflow-x-auto border border-[#b6ecff]/20 dark:border-[#262626] rounded-xl bg-black/10">
+                                    <table className="w-full text-left border-collapse text-xs">
+                                        <thead>
+                                            <tr className="bg-white/5 border-b border-[#b6ecff]/10 dark:border-[#262626]">
+                                                <th className="p-3 font-extrabold text-[#00aae1] uppercase tracking-wider">{language === 'es' ? 'Variable' : 'Variable'}</th>
+                                                <th className="p-3 font-extrabold text-[#00aae1] uppercase tracking-wider text-center">{language === 'es' ? 'Puntaje' : 'Score'}</th>
+                                                <th className="p-3 font-extrabold text-[#00aae1] uppercase tracking-wider">{language === 'es' ? 'Interpretación' : 'Interpretation'}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/5">
+                                            {(resultData.resultados_clinicos || []).map((varCli, index) => {
+                                                const textCol = {
+                                                    green: 'text-green-400',
+                                                    orange: 'text-orange-400',
+                                                    red: 'text-red-400',
+                                                    blue: 'text-blue-400',
+                                                    grey: 'text-slate-400'
+                                                }[varCli.color_visual] || 'text-slate-400';
+                                                return (
+                                                    <tr key={index} className="hover:bg-white/5 transition-all">
+                                                        <td className="p-3 font-bold text-white">
+                                                            <span className="text-[10px] font-black text-slate-400 block mr-2">{varCli.codigo}</span>
+                                                            {varCli.nombre}
+                                                        </td>
+                                                        <td className="p-3 font-black text-center text-sm text-white">{varCli.score}</td>
+                                                        <td className="p-3">
+                                                            <span className={`font-black ${textCol}`}>
+                                                                {varCli.clasificacion}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
+                    ) : (
+                        /* Only show score/classification when questionnaire has scoring */
+                        hasScore && (
+                            <div className={`p-6 rounded-2xl ${colorMap[resultData.color] || colorMap.grey} shadow-lg transition-all`}>
+                                {(resultData.puntaje_total !== null && resultData.puntaje_total !== undefined) && (
+                                    <>
+                                        <span className="text-[10px] font-extrabold uppercase tracking-widest block opacity-70 mb-1">{t('score')}</span>
+                                        <h3 className="text-4xl font-black mb-4">
+                                            {resultData.puntaje_total}
+                                        </h3>
+                                    </>
+                                )}
+                                {resultData.clasificacion_final && resultData.clasificacion_final.trim() !== '' && (
+                                    <>
+                                        <span className="text-[10px] font-extrabold uppercase tracking-widest block opacity-70 mb-1">{t('classification')}</span>
+                                        <p className="text-lg font-extrabold tracking-tight">
+                                            {resultData.clasificacion_final}
+                                        </p>
+                                    </>
+                                )}
+                            </div>
+                        )
                     )}
 
                     <div className="flex flex-col gap-2 pt-4">
@@ -648,6 +724,7 @@ export default function Responder() {
 // ---------------------------------------------------------------------------
 // PrintResultModal: renders the completed questionnaire with actual answers
 function PrintResultModal({ cuestionario, responseId, resultData, hasScore, answers, allQuestions, language, onClose }) {
+    const isClinical = parseInt(cuestionario?.id_tipo_cuestionario) === 2;
     const colorMap = {
         green: '#16a34a',
         orange: '#ea580c',
@@ -855,19 +932,65 @@ function PrintResultModal({ cuestionario, responseId, resultData, hasScore, answ
                      )}
 
                      {/* Score block — only when questionnaire has scoring ranges configured */}
-                     {hasScore && (
-                         <div className="mb-8 p-5 rounded-xl border-2" style={{ borderColor: accentColor, color: accentColor, background: accentColor + '10' }}>
-                             <div className="flex items-center gap-3 mb-2">
-                                 <span className="text-xs font-extrabold uppercase tracking-widest opacity-70">{language === 'es' ? 'Puntaje Total:' : 'Total Score:'}</span>
-                                 <span className="text-3xl font-black">{resultData.puntaje_total ?? 0}</span>
+                     {isClinical ? (
+                         <div className="mb-8 border border-slate-200 rounded-xl overflow-hidden">
+                             <div className="bg-slate-100 px-4 py-3 border-b border-slate-200">
+                                 <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                                     {language === 'es' ? 'Resultados de Evaluación Clínica' : 'Clinical Evaluation Results'}
+                                 </h3>
                              </div>
-                             {resultData.clasificacion_final && resultData.clasificacion_final.trim() !== '' && (
-                                 <div className="flex items-center gap-3">
-                                     <span className="text-xs font-extrabold uppercase tracking-widest opacity-70">{language === 'es' ? 'Clasificación:' : 'Classification:'}</span>
-                                     <span className="text-lg font-extrabold">{resultData.clasificacion_final}</span>
-                                 </div>
-                             )}
+                             <table className="w-full text-left border-collapse text-xs">
+                                 <thead>
+                                     <tr className="bg-slate-50 border-b border-slate-200">
+                                         <th className="p-3 font-extrabold text-slate-700 uppercase tracking-wider">{language === 'es' ? 'Código' : 'Code'}</th>
+                                         <th className="p-3 font-extrabold text-slate-700 uppercase tracking-wider">{language === 'es' ? 'Variable' : 'Variable'}</th>
+                                         <th className="p-3 font-extrabold text-slate-700 uppercase tracking-wider text-center">{language === 'es' ? 'Puntaje' : 'Score'}</th>
+                                         <th className="p-3 font-extrabold text-slate-700 uppercase tracking-wider">{language === 'es' ? 'Clasificación' : 'Classification'}</th>
+                                         <th className="p-3 font-extrabold text-slate-700 uppercase tracking-wider">{language === 'es' ? 'Descripción' : 'Description'}</th>
+                                     </tr>
+                                 </thead>
+                                 <tbody className="divide-y divide-slate-200">
+                                     {(resultData?.resultados_clinicos || []).map((varCli, index) => {
+                                         const colorMapText = {
+                                             green: '#16a34a',
+                                             orange: '#ea580c',
+                                             red: '#dc2626',
+                                             blue: '#2563eb',
+                                             grey: '#64748b'
+                                         };
+                                         const textCol = colorMapText[varCli.color_visual] || '#64748b';
+                                         return (
+                                             <tr key={index} className="hover:bg-slate-50">
+                                                 <td className="p-3 font-bold text-slate-500">{varCli.codigo}</td>
+                                                 <td className="p-3 font-bold text-slate-800">{varCli.nombre}</td>
+                                                 <td className="p-3 font-black text-center text-slate-800">{varCli.score}</td>
+                                                 <td className="p-3">
+                                                     <span className="font-extrabold px-2 py-0.5 rounded text-[10px] text-white uppercase tracking-wider" style={{ backgroundColor: textCol }}>
+                                                         {varCli.clasificacion}
+                                                     </span>
+                                                 </td>
+                                                 <td className="p-3 text-slate-600 italic leading-snug">{varCli.descripcion}</td>
+                                             </tr>
+                                         );
+                                     })}
+                                 </tbody>
+                             </table>
                          </div>
+                     ) : (
+                         hasScore && (
+                             <div className="mb-8 p-5 rounded-xl border-2" style={{ borderColor: accentColor, color: accentColor, background: accentColor + '10' }}>
+                                 <div className="flex items-center gap-3 mb-2">
+                                     <span className="text-xs font-extrabold uppercase tracking-widest opacity-70">{language === 'es' ? 'Puntaje Total:' : 'Total Score:'}</span>
+                                     <span className="text-3xl font-black">{resultData.puntaje_total ?? 0}</span>
+                                 </div>
+                                 {resultData.clasificacion_final && resultData.clasificacion_final.trim() !== '' && (
+                                     <div className="flex items-center gap-3">
+                                         <span className="text-xs font-extrabold uppercase tracking-widest opacity-70">{language === 'es' ? 'Clasificación:' : 'Classification:'}</span>
+                                         <span className="text-lg font-extrabold">{resultData.clasificacion_final}</span>
+                                     </div>
+                                 )}
+                             </div>
+                         )
                      )}
 
                      {/* Questions with actual answers */}

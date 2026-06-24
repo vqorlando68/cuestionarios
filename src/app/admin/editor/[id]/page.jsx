@@ -333,6 +333,7 @@ END;`
     const [activeDevTab, setActiveDevTab] = useState('obtener_cuestionarios');
     const [copiedId, setCopiedId] = useState(null);
     const [cardCoords, setCardCoords] = useState({});
+    const [activePropsTab, setActivePropsTab] = useState('variables');
 
     // Drag-and-drop state
     const [dragOverIdx, setDragOverIdx] = useState(null);
@@ -359,6 +360,7 @@ END;`
                     secciones: data.secciones || [],
                     flujos: data.flujos || [],
                     variables: data.variables || [],
+                    resultados_clinicos: data.resultados_clinicos || [],
                     resultados: data.resultados || []
                 };
                 setCuestionario(syncQuestionCodes(normalized));
@@ -539,6 +541,45 @@ END;`
                 }
             }
         });
+
+        // 6. Clinical range overlap validation
+        if (cuestionario.id_tipo_cuestionario === 2 && cuestionario.resultados_clinicos) {
+            const ranges = cuestionario.resultados_clinicos;
+            
+            // Warnings for ranges without variables
+            ranges.forEach(r => {
+                if (!r.id_variable_calculada) {
+                    validationErrors.push({
+                        type: 'warning',
+                        message: language === 'es'
+                            ? `El rango clínico "${r.nombre_rango}" (${r.valor_minimo}-${r.valor_maximo}) no tiene ninguna variable clínica asociada.`
+                            : `Clinical range "${r.nombre_rango}" (${r.valor_minimo}-${r.valor_maximo}) has no clinical variable associated.`
+                    });
+                }
+            });
+
+            // Overlap checks for ranges of the same variable
+            for (let i = 0; i < ranges.length; i++) {
+                const r1 = ranges[i];
+                if (!r1.id_variable_calculada) continue;
+                for (let j = i + 1; j < ranges.length; j++) {
+                    const r2 = ranges[j];
+                    if (r1.id_variable_calculada === r2.id_variable_calculada) {
+                        const overlap = (r1.valor_minimo <= r2.valor_maximo && r1.valor_maximo >= r2.valor_minimo);
+                        if (overlap) {
+                            const variable = cuestionario.variables.find(v => v.id === r1.id_variable_calculada);
+                            const varName = variable ? `${variable.nombre} (${variable.codigo})` : 'Desconocida';
+                            validationErrors.push({
+                                type: 'error',
+                                message: language === 'es'
+                                    ? `Traslape de rangos clínicos en la variable "${varName}": "${r1.nombre_rango}" (${r1.valor_minimo}-${r1.valor_maximo}) y "${r2.nombre_rango}" (${r2.valor_minimo}-${r2.valor_maximo})`
+                                    : `Clinical range overlap in variable "${varName}": "${r1.nombre_rango}" (${r1.valor_minimo}-${r1.valor_maximo}) and "${r2.nombre_rango}" (${r2.valor_minimo}-${r2.valor_maximo})`
+                            });
+                        }
+                    }
+                }
+            }
+        }
 
         return validationErrors;
     }, [cuestionario, language]);
@@ -955,6 +996,123 @@ END;`
         }));
     };
 
+    // ------------------------------------------------------------------------
+    // CLINICAL CALCULATED VARIABLES
+    // ------------------------------------------------------------------------
+    const addClinicalVariable = () => {
+        if (isReadOnly) return;
+        const newVar = {
+            id: -(Date.now()),
+            codigo: `VAR_${(cuestionario.variables || []).length + 1}`,
+            nombre: language === 'es' ? 'Nueva Variable' : 'New Variable',
+            descripcion: '',
+            formula_calculo: 'SUM',
+            valor_minimo: 0,
+            valor_maximo: 100,
+            unidad_medida: 'pts',
+            orden_visual: (cuestionario.variables || []).length + 1,
+            preguntas_asociadas: [],
+            estado: 1
+        };
+        setCuestionario(prev => ({
+            ...prev,
+            variables: [...(prev.variables || []), newVar]
+        }));
+    };
+
+    const updateClinicalVariable = (varId, field, value) => {
+        if (isReadOnly) return;
+        setCuestionario(prev => ({
+            ...prev,
+            variables: (prev.variables || []).map(v => v.id === varId ? { ...v, [field]: value } : v)
+        }));
+    };
+
+    const deleteClinicalVariable = (varId) => {
+        if (isReadOnly) return;
+        setCuestionario(prev => ({
+            ...prev,
+            variables: (prev.variables || []).filter(v => v.id !== varId)
+        }));
+    };
+
+    const addClinicalVariableQuestion = (varId) => {
+        if (isReadOnly) return;
+        const targetVar = (cuestionario.variables || []).find(v => v.id === varId);
+        if (!targetVar) return;
+        
+        const currentAssoc = targetVar.preguntas_asociadas || [];
+        const newAssoc = {
+            id: -(Date.now() + currentAssoc.length),
+            id_pregunta: '',
+            peso: 1,
+            orden_visual: currentAssoc.length + 1,
+            estado: 1
+        };
+
+        updateClinicalVariable(varId, 'preguntas_asociadas', [...currentAssoc, newAssoc]);
+    };
+
+    const updateClinicalVariableQuestion = (varId, assocId, field, value) => {
+        if (isReadOnly) return;
+        const targetVar = (cuestionario.variables || []).find(v => v.id === varId);
+        if (!targetVar) return;
+
+        const updatedAssocs = (targetVar.preguntas_asociadas || []).map(a => 
+            a.id === assocId ? { ...a, [field]: value } : a
+        );
+
+        updateClinicalVariable(varId, 'preguntas_asociadas', updatedAssocs);
+    };
+
+    const deleteClinicalVariableQuestion = (varId, assocId) => {
+        if (isReadOnly) return;
+        const targetVar = (cuestionario.variables || []).find(v => v.id === varId);
+        if (!targetVar) return;
+
+        const updatedAssocs = (targetVar.preguntas_asociadas || []).filter(a => a.id !== assocId);
+
+        updateClinicalVariable(varId, 'preguntas_asociadas', updatedAssocs);
+    };
+
+    // ------------------------------------------------------------------------
+    // CLINICAL RESULTS INTERPRETATION RANGOS
+    // ------------------------------------------------------------------------
+    const addClinicalRange = () => {
+        if (isReadOnly) return;
+        const newRange = {
+            id: -(Date.now()),
+            nombre_rango: language === 'es' ? 'Rango' : 'Range',
+            descripcion: '',
+            valor_minimo: 0,
+            valor_maximo: 10,
+            clasificacion: language === 'es' ? 'Clasificación' : 'Classification',
+            color_visual: 'green',
+            orden_visual: (cuestionario.resultados_clinicos || []).length + 1,
+            estado: 1
+        };
+        setCuestionario(prev => ({
+            ...prev,
+            resultados_clinicos: [...(prev.resultados_clinicos || []), newRange]
+        }));
+    };
+
+    const updateClinicalRange = (rangeId, field, value) => {
+        if (isReadOnly) return;
+        setCuestionario(prev => ({
+            ...prev,
+            resultados_clinicos: (prev.resultados_clinicos || []).map(r => r.id === rangeId ? { ...r, [field]: value } : r)
+        }));
+    };
+
+    const deleteClinicalRange = (rangeId) => {
+        if (isReadOnly) return;
+        setCuestionario(prev => ({
+            ...prev,
+            resultados_clinicos: (prev.resultados_clinicos || []).filter(r => r.id !== rangeId)
+        }));
+    };
+
     const handleExportUserGuideHTML = () => {
         const isEs = language === 'es';
         const title = isEs ? 'Guía del Usuario - Constructor de Cuestionarios' : 'User Guide - Questionnaire Builder';
@@ -1159,6 +1317,27 @@ END;`
                     <li>\${isEs ? '11 a 20 puntos: "Riesgo Moderado" (Naranja)' : '11 to 20 points: "Moderate Risk" (Orange)'}</li>
                     <li>\${isEs ? '21 a 35 puntos: "Riesgo Severo" (Rojo)' : '21 to 35 points: "Severe Risk" (Red)'}</li>
                 </ul>
+            </div>
+        </div>
+
+        <h2 class="section-title"><span style="color: var(--accent-cyan)">📋</span> \${isEs ? 'Tipos de Cuestionario y Cálculo' : 'Questionnaire Types & Calculations'}</h2>
+        
+        <div class="card">
+            <h3><span style="color: var(--accent-cyan)">📋</span> \${isEs ? 'Cuestionario General' : 'General Questionnaire'}</h3>
+            <p>\${isEs ? 'Cuestionarios lineales con sumatoria acumulativa total de puntos.' : 'Linear questionnaires with a total cumulative point sum.'}</p>
+            <div class="info-box">
+                <div><span class="badge">\${isEs ? 'Mecanismo de Cálculo:' : 'Calculation Mechanism:'}</span> \${isEs ? 'Suma directa de los puntajes de las opciones marcadas. Se almacena el puntaje total en TKR_CUESTIONARIO_RESPUESTA.' : 'Direct sum of the scores of selected options. The total score is stored in TKR_CUESTIONARIO_RESPUESTA.'}</div>
+                <div><span class="badge">\${isEs ? 'Interpretación:' : 'Interpretation:'}</span> \${isEs ? 'El puntaje acumulado total se evalúa contra la tabla de rangos globales (TKR_RANGOS_INTERPRETACION) asociados al cuestionario.' : 'The total accumulated score is evaluated against the table of global ranges (TKR_RANGOS_INTERPRETACION) associated with the questionnaire.'}</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3><span style="color: #8b5cf6">🧠</span> \${isEs ? 'Cuestionario Clínico (Salud Mental)' : 'Clinical Questionnaire (Mental Health)'}</h3>
+            <p>\${isEs ? 'Diseñados para evaluaciones complejas de múltiples dimensiones clínicas o psiquiátricas en paralelo.' : 'Designed for complex evaluations of multiple clinical or psychiatric dimensions in parallel.'}</p>
+            <div class="info-box">
+                <div><span class="badge">\${isEs ? 'Dimensiones (Variables):' : 'Dimensions (Variables):'}</span> \${isEs ? 'Agrupan subconjuntos de preguntas específicas (ej. Depresión). Configurable en TKR_VARIABLES_CALCULADAS.' : 'Group specific subsets of questions (e.g., Depression). Configurable in TKR_VARIABLES_CALCULADAS.'}</div>
+                <div><span class="badge">\${isEs ? 'Ponderación (Pesos):' : 'Weighting (Weights):'}</span> \${isEs ? 'Cada pregunta dentro de la dimensión posee un coeficiente multiplicador (ej. 1, 1.5, -1 para ítems inversos) definido en TKR_VARIABLES_CALCULADAS_DET.' : 'Each question within the dimension has a multiplier coefficient (e.g., 1, 1.5, -1 for reverse items) defined in TKR_VARIABLES_CALCULADAS_DET.'}</div>
+                <div><span class="badge">\${isEs ? 'Rangos Clínicos Independientes:' : 'Independent Clinical Ranges:'}</span> \${isEs ? 'Cada dimensión clínica tiene sus propios límites de puntaje y clasificaciones en TKR_RANGOS_INTERPRETACION (ej. Ansiedad Leve 0-5; Ansiedad Severa 15-20), independientes de las demás dimensiones.' : 'Each clinical dimension has its own score limits and classifications in TKR_RANGOS_INTERPRETACION (e.g., Mild Anxiety 0-5; Severe Anxiety 15-20), independent of other dimensions.'}</div>
             </div>
         </div>
     </div>
@@ -1703,16 +1882,34 @@ END;`
                     >
                         ⬅️
                     </button>
-                    <div className="flex-1 min-w-0">
-                        <input
-                            type="text"
-                            value={cuestionario.nombre || ''}
-                            onChange={(e) => updateMeta('nombre', e.target.value)}
-                            disabled={isReadOnly}
-                            className="bg-transparent border-none outline-none font-bold text-slate-800 dark:text-[#fafafa] text-lg w-full max-w-[500px] lg:max-w-[700px] focus:ring-1 focus:ring-[#00aae1] rounded px-1.5"
-                            placeholder={language === 'es' ? 'Nombre del cuestionario' : 'Questionnaire name'}
-                        />
-                        <span className="text-xs block text-slate-400 font-semibold uppercase px-1.5">{t('version')}: {cuestionario.version}</span>
+                    <div className="flex-1 min-w-0 flex flex-col md:flex-row md:items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                            <input
+                                type="text"
+                                value={cuestionario.nombre || ''}
+                                onChange={(e) => updateMeta('nombre', e.target.value)}
+                                disabled={isReadOnly}
+                                className="bg-transparent border-none outline-none font-bold text-slate-800 dark:text-[#fafafa] text-lg w-full focus:ring-1 focus:ring-[#00aae1] rounded px-1.5"
+                                placeholder={language === 'es' ? 'Nombre del cuestionario' : 'Questionnaire name'}
+                            />
+                            <div className="flex items-center gap-3 text-xs text-slate-400 font-semibold uppercase px-1.5">
+                                <span>{t('version')}: {cuestionario.version}</span>
+                                <span>•</span>
+                                <span>{cuestionario.id_tipo_cuestionario === 2 ? (language === 'es' ? 'Salud Mental' : 'Mental Health') : (language === 'es' ? 'General' : 'General')}</span>
+                            </div>
+                        </div>
+                        <div className="shrink-0 flex items-center gap-1.5 text-xs mr-4">
+                            <label className="text-slate-505 dark:text-slate-400 font-semibold">{language === 'es' ? 'Tipo:' : 'Type:'}</label>
+                            <select
+                                value={cuestionario.id_tipo_cuestionario || 1}
+                                onChange={(e) => updateMeta('id_tipo_cuestionario', parseInt(e.target.value))}
+                                disabled={isReadOnly}
+                                className="bg-white/40 dark:bg-black/20 border border-[#b6ecff] dark:border-[#262626] rounded px-2.5 py-1 text-[#04354d] dark:text-[#fafafa] focus:outline-none focus:border-[#00aae1] font-bold text-xs"
+                            >
+                                <option value={1} className="bg-slate-100 dark:bg-[#0c1a24] text-slate-850 dark:text-[#fafafa]">{language === 'es' ? 'General' : 'General'}</option>
+                                <option value={2} className="bg-slate-100 dark:bg-[#0c1a24] text-slate-850 dark:text-[#fafafa]">{language === 'es' ? 'Salud Mental (Clínico)' : 'Mental Health (Clinical)'}</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -2276,89 +2473,368 @@ END;`
                         </div>
                     ) : (
                         // No selected question - show Questionnaire properties (Score classifications)
-                        <div className="space-y-6">
-                            <div>
-                                <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-600 dark:text-slate-400 mb-2">{t('results')}</h3>
-                                <p className="text-[10px] text-slate-500 dark:text-slate-450 font-medium leading-relaxed">
-                                    {language === 'es' ? 'Defina los rangos de puntaje y clasificaciones finales.' : 'Define scoring ranges and classification labels.'}
-                                </p>
-                            </div>
+                        cuestionario.id_tipo_cuestionario === 2 ? (
+                            <div className="space-y-6">
+                                {/* Tab Headers */}
+                                <div className="flex border-b border-[#c084fc]/30 dark:border-[#262626] pb-2 gap-2">
+                                    <button
+                                        onClick={() => setActivePropsTab('variables')}
+                                        className={`flex-1 pb-1.5 text-center text-xs font-bold transition-all ${
+                                            activePropsTab === 'variables'
+                                                ? 'border-b-2 border-[#c084fc] text-[#c084fc]'
+                                                : 'text-slate-400 hover:text-slate-200'
+                                        }`}
+                                    >
+                                        {language === 'es' ? 'Variables' : 'Variables'}
+                                    </button>
+                                    <button
+                                        onClick={() => setActivePropsTab('resultados')}
+                                        className={`flex-1 pb-1.5 text-center text-xs font-bold transition-all ${
+                                            activePropsTab === 'resultados'
+                                                ? 'border-b-2 border-[#c084fc] text-[#c084fc]'
+                                                : 'text-slate-400 hover:text-slate-200'
+                                        }`}
+                                    >
+                                        {language === 'es' ? 'Rangos' : 'Ranges'}
+                                    </button>
+                                </div>
 
-                            {!isReadOnly && (
-                                <button
-                                    onClick={addResultClassification}
-                                    className="w-full py-2 border border-[#b6ecff] dark:border-[#262626] hover:border-[#ff7a39] hover:bg-[#ff7a39]/10 text-slate-700 dark:text-slate-200 hover:text-[#ff7a39] dark:hover:text-[#ff7a39] text-xs font-bold uppercase rounded-lg transition-all"
-                                >
-                                    ➕ {t('addResult')}
-                                </button>
-                            )}
-
-                            <div className="space-y-3">
-                                {cuestionario.resultados.map((res) => (
-                                    <div key={res.id} className="p-3 bg-white/40 dark:bg-black/10 border border-[#b6ecff]/30 dark:border-[#262626] rounded-xl space-y-2 relative">
-                                        {!isReadOnly && (
-                                            <button
-                                                onClick={() => deleteResultClassification(res.id)}
-                                                className="absolute top-2 right-2 text-slate-400 hover:text-red-500 text-xs font-bold"
-                                            >
-                                                ✕
-                                            </button>
-                                        )}
-                                        
-                                        <div className="grid grid-cols-2 gap-2">
+                                {activePropsTab === 'variables' ? (
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-center">
                                             <div>
-                                                <label className="block text-[9px] font-semibold text-slate-650 dark:text-slate-400 mb-0.5">{language === 'es' ? 'Mínimo' : 'Min'}</label>
-                                                <input
-                                                    type="number"
-                                                    value={res.puntaje_desde}
-                                                    onChange={(e) => updateResultClassification(res.id, 'puntaje_desde', parseInt(e.target.value) || 0)}
-                                                    readOnly={isReadOnly}
-                                                    className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#b6ecff]/50 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa]"
-                                                />
+                                                <h4 className="text-xs font-extrabold uppercase tracking-widest text-[#c084fc]">{language === 'es' ? 'Variables Clínicas' : 'Clinical Variables'}</h4>
+                                                <p className="text-[9px] text-slate-500 font-medium">{language === 'es' ? 'Defina variables y asocie preguntas con pesos.' : 'Define variables and map questions with weights.'}</p>
                                             </div>
-                                            <div>
-                                                <label className="block text-[9px] font-semibold text-slate-655 dark:text-slate-400 mb-0.5">{language === 'es' ? 'Máximo' : 'Max'}</label>
-                                                <input
-                                                    type="number"
-                                                    value={res.puntaje_hasta}
-                                                    onChange={(e) => updateResultClassification(res.id, 'puntaje_hasta', parseInt(e.target.value) || 0)}
-                                                    readOnly={isReadOnly}
-                                                    className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#b6ecff]/50 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa]"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-[9px] font-semibold text-slate-660 dark:text-slate-400 mb-0.5">Clasificación</label>
-                                            <input
-                                                type="text"
-                                                value={res.nombre_resultado}
-                                                onChange={(e) => updateResultClassification(res.id, 'nombre_resultado', e.target.value)}
-                                                readOnly={isReadOnly}
-                                                className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#b6ecff]/50 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa]"
-                                            />
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <label className="block text-[9px] font-semibold text-slate-670 dark:text-slate-400 mb-0.5">Color</label>
-                                                <select
-                                                    value={res.color}
-                                                    onChange={(e) => updateResultClassification(res.id, 'color', e.target.value)}
-                                                    disabled={isReadOnly}
-                                                    className="w-full px-2 py-1 rounded bg-white dark:bg-[#071724] border border-[#b6ecff]/50 dark:border-[#262626] text-xs text-[#04354d] dark:text-slate-200"
+                                            {!isReadOnly && (
+                                                <button
+                                                    onClick={addClinicalVariable}
+                                                    className="p-1 rounded bg-[#c084fc]/10 text-[#c084fc] hover:bg-[#c084fc] hover:text-white transition-all text-xs font-bold"
+                                                    title={language === 'es' ? 'Agregar Variable' : 'Add Variable'}
                                                 >
-                                                    <option value="green" className="bg-[#effaff] dark:bg-[#121c24] text-[#04354d] dark:text-slate-200">Verde</option>
-                                                    <option value="orange" className="bg-[#effaff] dark:bg-[#121c24] text-[#04354d] dark:text-slate-200">Naranja</option>
-                                                    <option value="red" className="bg-[#effaff] dark:bg-[#121c24] text-[#04354d] dark:text-slate-200">Rojo</option>
-                                                    <option value="blue" className="bg-[#effaff] dark:bg-[#121c24] text-[#04354d] dark:text-slate-200">Azul</option>
-                                                </select>
-                                            </div>
+                                                    ➕
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            {(cuestionario.variables || []).map((v) => (
+                                                <div key={v.id} className="p-3 bg-purple-500/5 dark:bg-black/20 border border-[#c084fc]/30 rounded-xl space-y-3 relative">
+                                                    {!isReadOnly && (
+                                                        <button
+                                                            onClick={() => deleteClinicalVariable(v.id)}
+                                                            className="absolute top-2 right-2 text-slate-400 hover:text-red-500 text-xs font-bold"
+                                                            title={language === 'es' ? 'Eliminar Variable' : 'Delete Variable'}
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    )}
+
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <label className="block text-[9px] font-semibold text-slate-550 dark:text-slate-400 mb-0.5">Código</label>
+                                                            <input
+                                                                type="text"
+                                                                value={v.codigo || ''}
+                                                                onChange={(e) => updateClinicalVariable(v.id, 'codigo', e.target.value.toUpperCase())}
+                                                                readOnly={isReadOnly}
+                                                                className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs font-bold text-[#04354d] dark:text-[#fafafa]"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[9px] font-semibold text-slate-550 dark:text-slate-400 mb-0.5">{language === 'es' ? 'Nombre' : 'Name'}</label>
+                                                            <input
+                                                                type="text"
+                                                                value={v.nombre || ''}
+                                                                onChange={(e) => updateClinicalVariable(v.id, 'nombre', e.target.value)}
+                                                                readOnly={isReadOnly}
+                                                                className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs font-semibold text-[#04354d] dark:text-[#fafafa]"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block text-[9px] font-semibold text-slate-550 dark:text-slate-400 mb-0.5">{language === 'es' ? 'Descripción' : 'Description'}</label>
+                                                        <textarea
+                                                            value={v.descripcion || ''}
+                                                            onChange={(e) => updateClinicalVariable(v.id, 'descripcion', e.target.value)}
+                                                            readOnly={isReadOnly}
+                                                            rows="2"
+                                                            className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa] resize-none"
+                                                        />
+                                                    </div>
+
+                                                    {/* Associated questions sub-section */}
+                                                    <div className="space-y-2 border-t border-[#c084fc]/20 pt-2">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{language === 'es' ? 'Preguntas Asociadas' : 'Associated Questions'}</span>
+                                                            {!isReadOnly && (
+                                                                <button
+                                                                    onClick={() => addClinicalVariableQuestion(v.id)}
+                                                                    className="text-[10px] font-bold text-[#c084fc] hover:underline"
+                                                                >
+                                                                    ➕ {language === 'es' ? 'Asociar' : 'Map'}
+                                                                </button>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="space-y-2">
+                                                            {(v.preguntas_asociadas || []).map((assoc) => (
+                                                                <div key={assoc.id} className="flex items-center gap-1.5 bg-white/60 dark:bg-black/30 p-1.5 rounded-lg border border-[#c084fc]/10">
+                                                                    <select
+                                                                        value={assoc.id_pregunta || ''}
+                                                                        onChange={(e) => updateClinicalVariableQuestion(v.id, assoc.id, 'id_pregunta', parseInt(e.target.value) || '')}
+                                                                        disabled={isReadOnly}
+                                                                        className="flex-1 px-1.5 py-0.5 rounded bg-white dark:bg-[#071724] border border-[#c084fc]/20 dark:border-[#262626] text-xs text-slate-800 dark:text-slate-200"
+                                                                    >
+                                                                        <option value="">-- {language === 'es' ? 'Pregunta' : 'Question'} --</option>
+                                                                        {allQuestionsList.map(q => (
+                                                                            <option key={q.id} value={q.id}>
+                                                                                {q.codigo} ({q.texto_pregunta.slice(0, 20)}...)
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+
+                                                                    <div className="w-12">
+                                                                        <input
+                                                                            type="number"
+                                                                            value={assoc.peso}
+                                                                            onChange={(e) => updateClinicalVariableQuestion(v.id, assoc.id, 'peso', parseFloat(e.target.value) || 0)}
+                                                                            readOnly={isReadOnly}
+                                                                            placeholder="peso"
+                                                                            className="w-full px-1.5 py-0.5 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs font-bold text-center text-slate-800 dark:text-[#fafafa]"
+                                                                            title="Peso / Multiplicador"
+                                                                        />
+                                                                    </div>
+
+                                                                    {!isReadOnly && (
+                                                                        <button
+                                                                            onClick={() => deleteClinicalVariableQuestion(v.id, assoc.id)}
+                                                                            className="text-slate-400 hover:text-red-500 text-xs font-bold px-1"
+                                                                        >
+                                                                            ✕
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
-                                ))}
+                                ) : (
+                                    /* Interpretation Ranges */
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-center">
+                                            <div>
+                                                <h4 className="text-xs font-extrabold uppercase tracking-widest text-[#c084fc]">{language === 'es' ? 'Rangos Clínicos' : 'Clinical Interpretation'}</h4>
+                                                <p className="text-[9px] text-slate-500 font-medium">{language === 'es' ? 'Establezca límites, diagnósticos y colores.' : 'Set scoring limits, classifications, and colors.'}</p>
+                                            </div>
+                                            {!isReadOnly && (
+                                                <button
+                                                    onClick={addClinicalRange}
+                                                    className="p-1 rounded bg-[#c084fc]/10 text-[#c084fc] hover:bg-[#c084fc] hover:text-white transition-all text-xs font-bold"
+                                                    title={language === 'es' ? 'Agregar Rango' : 'Add Range'}
+                                                >
+                                                    ➕
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            {(cuestionario.resultados_clinicos || []).map((res) => (
+                                                <div key={res.id} className="p-3 bg-purple-500/5 dark:bg-black/20 border border-[#c084fc]/30 rounded-xl space-y-2 relative">
+                                                    {!isReadOnly && (
+                                                        <button
+                                                            onClick={() => deleteClinicalRange(res.id)}
+                                                            className="absolute top-2 right-2 text-slate-450 hover:text-red-500 text-xs font-bold"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    )}
+
+                                                    <div>
+                                                        <label className="block text-[9px] font-semibold text-slate-655 dark:text-slate-400 mb-0.5 uppercase tracking-wider">
+                                                            {language === 'es' ? 'Variable Clínica Asociada' : 'Associated Clinical Variable'}
+                                                        </label>
+                                                        <select
+                                                            value={res.id_variable_calculada || ''}
+                                                            onChange={(e) => updateClinicalRange(res.id, 'id_variable_calculada', e.target.value ? parseInt(e.target.value) : null)}
+                                                            disabled={isReadOnly}
+                                                            className="w-full px-2 py-1 rounded bg-white dark:bg-[#071724] border border-[#c084fc]/20 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa] font-bold"
+                                                        >
+                                                            <option value="">{language === 'es' ? '-- Seleccionar Variable --' : '-- Select Variable --'}</option>
+                                                            {(cuestionario.variables || []).map(v => (
+                                                                <option key={v.id} value={v.id}>{v.nombre} ({v.codigo})</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <label className="block text-[9px] font-semibold text-slate-650 dark:text-slate-400 mb-0.5">{language === 'es' ? 'Rango' : 'Label'}</label>
+                                                            <input
+                                                                type="text"
+                                                                value={res.nombre_rango || ''}
+                                                                onChange={(e) => updateClinicalRange(res.id, 'nombre_rango', e.target.value)}
+                                                                readOnly={isReadOnly}
+                                                                placeholder="Ej. Moderado"
+                                                                className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa] font-bold"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[9px] font-semibold text-slate-650 dark:text-slate-400 mb-0.5">Color</label>
+                                                            <select
+                                                                value={res.color_visual || 'green'}
+                                                                onChange={(e) => updateClinicalRange(res.id, 'color_visual', e.target.value)}
+                                                                disabled={isReadOnly}
+                                                                className="w-full px-2 py-1 rounded bg-white dark:bg-[#071724] border border-[#c084fc]/20 dark:border-[#262626] text-xs text-[#04354d] dark:text-slate-200"
+                                                            >
+                                                                <option value="green">Verde</option>
+                                                                <option value="orange">Naranja</option>
+                                                                <option value="red">Rojo</option>
+                                                                <option value="blue">Azul</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <label className="block text-[9px] font-semibold text-slate-650 dark:text-slate-400 mb-0.5">{language === 'es' ? 'Mínimo' : 'Min Score'}</label>
+                                                            <input
+                                                                type="number"
+                                                                value={res.valor_minimo}
+                                                                onChange={(e) => updateClinicalRange(res.id, 'valor_minimo', parseInt(e.target.value) || 0)}
+                                                                readOnly={isReadOnly}
+                                                                className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs font-bold text-[#04354d] dark:text-[#fafafa]"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[9px] font-semibold text-slate-650 dark:text-slate-400 mb-0.5">{language === 'es' ? 'Máximo' : 'Max Score'}</label>
+                                                            <input
+                                                                type="number"
+                                                                value={res.valor_maximo}
+                                                                onChange={(e) => updateClinicalRange(res.id, 'valor_maximo', parseInt(e.target.value) || 0)}
+                                                                readOnly={isReadOnly}
+                                                                className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs font-bold text-[#04354d] dark:text-[#fafafa]"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block text-[9px] font-semibold text-slate-655 dark:text-slate-400 mb-0.5">{language === 'es' ? 'Clasificación Clínica' : 'Clinical Classification'}</label>
+                                                        <input
+                                                            type="text"
+                                                            value={res.clasificacion || ''}
+                                                            onChange={(e) => updateClinicalRange(res.id, 'clasificacion', e.target.value)}
+                                                            readOnly={isReadOnly}
+                                                            placeholder="Ej. Depresión Moderada"
+                                                            className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa] font-semibold"
+                                                        />
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block text-[9px] font-semibold text-slate-655 dark:text-slate-400 mb-0.5">{language === 'es' ? 'Descripción Clínica' : 'Clinical Description'}</label>
+                                                        <textarea
+                                                            value={res.descripcion || ''}
+                                                            onChange={(e) => updateClinicalRange(res.id, 'descripcion', e.target.value)}
+                                                            readOnly={isReadOnly}
+                                                            rows="2"
+                                                            className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa] resize-none"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                        </div>
+                        ) : (
+                            <div className="space-y-6">
+                                <div>
+                                    <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-600 dark:text-slate-400 mb-2">{t('results')}</h3>
+                                    <p className="text-[10px] text-slate-500 dark:text-slate-450 font-medium leading-relaxed">
+                                        {language === 'es' ? 'Defina los rangos de puntaje y clasificaciones finales.' : 'Define scoring ranges and classification labels.'}
+                                    </p>
+                                </div>
+
+                                {!isReadOnly && (
+                                    <button
+                                        onClick={addResultClassification}
+                                        className="w-full py-2 border border-[#b6ecff] dark:border-[#262626] hover:border-[#ff7a39] hover:bg-[#ff7a39]/10 text-slate-700 dark:text-slate-200 hover:text-[#ff7a39] dark:hover:text-[#ff7a39] text-xs font-bold uppercase rounded-lg transition-all"
+                                    >
+                                        ➕ {t('addResult')}
+                                    </button>
+                                )}
+
+                                <div className="space-y-3">
+                                    {cuestionario.resultados.map((res) => (
+                                        <div key={res.id} className="p-3 bg-white/40 dark:bg-black/10 border border-[#b6ecff]/30 dark:border-[#262626] rounded-xl space-y-2 relative">
+                                            {!isReadOnly && (
+                                                <button
+                                                    onClick={() => deleteResultClassification(res.id)}
+                                                    className="absolute top-2 right-2 text-slate-400 hover:text-red-500 text-xs font-bold"
+                                                >
+                                                    ✕
+                                                </button>
+                                            )}
+                                            
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="block text-[9px] font-semibold text-slate-650 dark:text-slate-400 mb-0.5">{language === 'es' ? 'Mínimo' : 'Min'}</label>
+                                                    <input
+                                                        type="number"
+                                                        value={res.puntaje_desde}
+                                                        onChange={(e) => updateResultClassification(res.id, 'puntaje_desde', parseInt(e.target.value) || 0)}
+                                                        readOnly={isReadOnly}
+                                                        className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#b6ecff]/50 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa]"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[9px] font-semibold text-slate-655 dark:text-slate-400 mb-0.5">{language === 'es' ? 'Máximo' : 'Max'}</label>
+                                                    <input
+                                                        type="number"
+                                                        value={res.puntaje_hasta}
+                                                        onChange={(e) => updateResultClassification(res.id, 'puntaje_hasta', parseInt(e.target.value) || 0)}
+                                                        readOnly={isReadOnly}
+                                                        className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#b6ecff]/50 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa]"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-[9px] font-semibold text-slate-660 dark:text-slate-400 mb-0.5">Clasificación</label>
+                                                <input
+                                                    type="text"
+                                                    value={res.nombre_resultado}
+                                                    onChange={(e) => updateResultClassification(res.id, 'nombre_resultado', e.target.value)}
+                                                    readOnly={isReadOnly}
+                                                    className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#b6ecff]/50 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa]"
+                                                />
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="block text-[9px] font-semibold text-slate-670 dark:text-slate-400 mb-0.5">Color</label>
+                                                    <select
+                                                        value={res.color}
+                                                        onChange={(e) => updateResultClassification(res.id, 'color', e.target.value)}
+                                                        disabled={isReadOnly}
+                                                        className="w-full px-2 py-1 rounded bg-white dark:bg-[#071724] border border-[#b6ecff]/50 dark:border-[#262626] text-xs text-[#04354d] dark:text-slate-200"
+                                                    >
+                                                        <option value="green" className="bg-[#effaff] dark:bg-[#121c24] text-[#04354d] dark:text-slate-200">Verde</option>
+                                                        <option value="orange" className="bg-[#effaff] dark:bg-[#121c24] text-[#04354d] dark:text-slate-200">Naranja</option>
+                                                        <option value="red" className="bg-[#effaff] dark:bg-[#121c24] text-[#04354d] dark:text-slate-200">Rojo</option>
+                                                        <option value="blue" className="bg-[#effaff] dark:bg-[#121c24] text-[#04354d] dark:text-slate-200">Azul</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )
                     )}
             </div>
         </div>
@@ -2414,6 +2890,16 @@ END;`
                             }`}
                         >
                             📊 {language === 'es' ? 'Resultados y Clasificaciones' : 'Results & Classifications'}
+                        </button>
+                        <button
+                            onClick={() => setActiveHelpTab('tipos')}
+                            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
+                                activeHelpTab === 'tipos'
+                                    ? 'bg-[#8b5cf6] text-slate-50'
+                                    : 'hover:bg-[#00aae1]/10 text-slate-700 hover:text-[#00aae1] dark:hover:bg-white/5 text-slate-705 dark:text-slate-300 dark:hover:text-white'
+                            }`}
+                        >
+                            📋 {language === 'es' ? 'Tipos de Cuestionario' : 'Questionnaire Types'}
                         </button>
                     </div>
 
@@ -2563,6 +3049,58 @@ END;`
                                             <li>{language === 'es' ? '11 a 20 puntos: "Riesgo Moderado" (Naranja)' : '11 to 20 points: "Moderate Risk" (Orange)'}</li>
                                             <li>{language === 'es' ? '21 a 35 puntos: "Riesgo Severo" (Rojo)' : '21 to 35 points: "Severe Risk" (Red)'}</li>
                                         </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeHelpTab === 'tipos' && (
+                            <div className="space-y-6">
+                                {/* Explicación General */}
+                                <div className="p-4 rounded-xl bg-white/90 dark:bg-[#0a1e2b]/80 border border-[#00aae1]/20 dark:border-[#06b6d4]/20 space-y-2 shadow-sm">
+                                    <h4 className="text-sm font-bold text-[#04354d] dark:text-[#fafafa] flex items-center gap-2">
+                                        <span className="text-[#00aae1]">📋</span> {language === 'es' ? 'Cuestionario General' : 'General Questionnaire'}
+                                    </h4>
+                                    <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-medium">
+                                        {language === 'es'
+                                            ? 'Los cuestionarios generales están diseñados para evaluaciones tradicionales y lineales, donde se calcula un único puntaje final acumulativo.'
+                                            : 'General questionnaires are designed for traditional, linear evaluations where a single final cumulative score is calculated.'}
+                                    </p>
+                                    <div className="text-[11px] text-slate-705 dark:text-slate-300 bg-[#effaff]/90 dark:bg-[#05141e]/90 p-3 rounded-lg space-y-1.5 border border-[#00aae1]/10 dark:border-[#06b6d4]/10">
+                                        <div><span className="text-[#ff7a39] dark:text-[#ffa36c] font-bold">{language === 'es' ? 'Mecanismo de Cálculo:' : 'Calculation Mechanism:'}</span> {language === 'es' ? 'Suma directa de los puntajes configurados en cada una de las opciones seleccionadas (en preguntas de selección) o parejas correctas (en preguntas asociativas).' : 'Direct sum of the scores configured for each of the selected choices (in selection questions) or correct pairs (in matching questions).'}</div>
+                                        <div><span className="text-[#ff7a39] dark:text-[#ffa36c] font-bold">{language === 'es' ? 'Interpretación:' : 'Interpretation:'}</span> {language === 'es' ? 'El puntaje acumulado total se compara directamente contra los rangos de interpretación definidos a nivel de cuestionario en la tabla TKR_RANGOS_INTERPRETACION (ej. 0-10 puntos: Riesgo Bajo).' : 'The total accumulated score is compared directly against the interpretation ranges defined at the questionnaire level in the TKR_RANGOS_INTERPRETACION table (e.g., 0-10 points: Low Risk).'}</div>
+                                    </div>
+                                </div>
+
+                                {/* Explicación Clínico */}
+                                <div className="p-4 rounded-xl bg-white/90 dark:bg-[#0a1e2b]/80 border border-[#00aae1]/20 dark:border-[#06b6d4]/20 space-y-2 shadow-sm">
+                                    <h4 className="text-sm font-bold text-[#8b5cf6] flex items-center gap-2">
+                                        <span className="text-[#8b5cf6]">🧠</span> {language === 'es' ? 'Cuestionario Clínico (Salud Mental)' : 'Clinical Questionnaire (Mental Health)'}
+                                    </h4>
+                                    <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-medium">
+                                        {language === 'es'
+                                            ? 'Cuestionarios diseñados para evaluaciones psicológicas y psiquiátricas complejas. Permiten evaluar múltiples dimensiones clínicas (como depresión, ansiedad, etc.) de forma simultánea.'
+                                            : 'Questionnaires designed for complex psychological and psychiatric evaluations. They allow evaluating multiple clinical dimensions (such as depression, anxiety, etc.) simultaneously.'}
+                                    </p>
+                                    <div className="text-[11px] text-slate-705 dark:text-slate-300 bg-[#effaff]/90 dark:bg-[#05141e]/90 p-3 rounded-lg space-y-2 border border-[#8b5cf6]/20 dark:border-[#8b5cf6]/20">
+                                        <div>
+                                            <span className="text-[#8b5cf6] font-bold">{language === 'es' ? '1. Variables Calculadas (Dimensiones):' : '1. Calculated Variables (Dimensions):'}</span>{' '}
+                                            {language === 'es'
+                                                ? 'Permiten agrupar un subconjunto de preguntas que miden un aspect específico (ej. Ansiedad). Se almacenan en la tabla TKR_VARIABLES_CALCULADAS.'
+                                                : 'Allow grouping a subset of questions that measure a specific aspect (e.g., Anxiety). They are stored in the TKR_VARIABLES_CALCULADAS table.'}
+                                        </div>
+                                        <div>
+                                            <span className="text-[#8b5cf6] font-bold">{language === 'es' ? '2. Ponderación por Pesos (TKR_VARIABLES_CALCULADAS_DET):' : '2. Weight-based Ponderation (TKR_VARIABLES_CALCULADAS_DET):'}</span>{' '}
+                                            {language === 'es'
+                                                ? 'Cada pregunta asociada a una dimensión clínica puede tener un "peso" específico (ej. peso 1.5 o peso -1 para preguntas invertidas). La puntuación de la pregunta se multiplica por este peso antes de acumularse.'
+                                                : 'Each question associated with a clinical dimension can have a specific "weight" (e.g., weight 1.5 or weight -1 for reverse-scored questions). The question score is multiplied by this weight before accumulating.'}
+                                        </div>
+                                        <div>
+                                            <span className="text-[#8b5cf6] font-bold">{language === 'es' ? '3. Rangos de Interpretación Independientes (TKR_RANGOS_INTERPRETACION):' : '3. Independent Interpretation Ranges (TKR_RANGOS_INTERPRETACION):'}</span>{' '}
+                                            {language === 'es'
+                                                ? 'A diferencia del general, cada dimensión o variable clínica tiene sus propios límites mínimo y máximo y sus propias etiquetas de severidad (ej. Ansiedad Leve de 0-5, Ansiedad Severa de 15-20), independientes de las otras variables del mismo cuestionario.'
+                                                : 'Unlike the general one, each dimension or clinical variable has its own minimum and maximum limits and its own severity labels (e.g., Mild Anxiety 0-5, Severe Anxiety 15-20), independent of other variables in the same questionnaire.'}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
