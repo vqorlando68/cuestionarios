@@ -220,6 +220,29 @@ export default function Responder() {
     // Finalize Questionnaire answering
     const handleFinalize = async () => {
         if (!responseId) return;
+
+        // If it is single page layout, validate ALL mandatory questions first
+        if (cuestionario.presentacion_unica === 1) {
+            for (let q of allQuestions) {
+                if (q.obligatoria === 1) {
+                    const ans = answers[q.id];
+                    if (!ans || 
+                        (q.tipo_codigo === 'ABIERTA' && (!ans.text || !ans.text.trim())) ||
+                        ((q.tipo_codigo === 'UNICA' || q.tipo_codigo === 'MULTIPLE') && (!ans.options || ans.options.length === 0)) ||
+                        (q.tipo_codigo === 'ASOCIATIVA' && (!ans.associations || Object.keys(ans.associations).length < q.asociaciones.length))
+                    ) {
+                        await alert(language === 'es' 
+                            ? `La pregunta "${q.texto_pregunta}" es obligatoria.` 
+                            : `The question "${q.texto_pregunta}" is required.`
+                        );
+                        const el = document.getElementById(`pregunta-container-${q.id}`);
+                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        return;
+                    }
+                }
+            }
+        }
+
         setSavingAnswers(true);
         try {
             // Save final answers first
@@ -296,20 +319,20 @@ export default function Responder() {
     };
 
     // Value setters for input updates
-    const setOpenTextVal = (val) => {
+    const setOpenTextVal = (questionId, val) => {
         setAnswers(prev => ({
             ...prev,
-            [activeQuestion.id]: {
-                ...prev[activeQuestion.id],
+            [questionId]: {
+                ...(prev[questionId] || { options: [], text: '', associations: {} }),
                 text: val,
                 options: []
             }
         }));
     };
 
-    const toggleOptionVal = (opId, isRadio = false) => {
+    const toggleOptionVal = (questionId, opId, isRadio = false) => {
         setAnswers(prev => {
-            const currentObj = prev[activeQuestion.id] || { options: [], text: '' };
+            const currentObj = prev[questionId] || { options: [], text: '', associations: {} };
             let newOps = [];
             if (isRadio) {
                 newOps = [opId.toString()];
@@ -320,7 +343,7 @@ export default function Responder() {
             }
             return {
                 ...prev,
-                [activeQuestion.id]: {
+                [questionId]: {
                     ...currentObj,
                     options: newOps
                 }
@@ -328,13 +351,13 @@ export default function Responder() {
         });
     };
 
-    const setAssociationVal = (izq, der) => {
+    const setAssociationVal = (questionId, izq, der) => {
         setAnswers(prev => {
-            const currentObj = prev[activeQuestion.id] || { associations: {}, options: [], text: '' };
+            const currentObj = prev[questionId] || { associations: {}, options: [], text: '' };
             const nextAssoc = { ...(currentObj.associations || {}), [izq]: der };
             return {
                 ...prev,
-                [activeQuestion.id]: {
+                [questionId]: {
                     ...currentObj,
                     associations: nextAssoc
                 }
@@ -531,6 +554,182 @@ export default function Responder() {
         );
     }
 
+    if (cuestionario.presentacion_unica === 1) {
+        return (
+            <div className="flex flex-col min-h-screen text-slate-800 dark:text-[#fafafa] relative overflow-hidden justify-between p-6">
+                
+                {/* Header: Title and Save Draft button */}
+                <header className="flex justify-between items-center z-10 mb-6">
+                    <div>
+                        <h1 className="text-lg font-black tracking-tight text-white dark:text-[#fafafa]">{cuestionario.nombre}</h1>
+                        <span className="text-[10px] text-slate-400 font-semibold uppercase">
+                            {language === 'es' ? 'Presentación Única • Todas las preguntas' : 'Single Page Layout • All questions'}
+                        </span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={handleSaveDraft}
+                            disabled={savingAnswers}
+                            className="px-4 py-2 text-xs font-bold uppercase border border-[#b6ecff]/50 dark:border-[#262626] rounded-xl hover:border-[#ff7a39] text-slate-700 hover:text-white transition-all disabled:opacity-50"
+                        >
+                            {savingAnswers ? t('loading') : t('saveAndContinue')}
+                        </button>
+                    </div>
+                </header>
+
+                {/* Glowing backgrounds */}
+                <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-cyan-500/10 blur-[120px] pointer-events-none" />
+                <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-orange-500/10 blur-[120px] pointer-events-none" />
+
+                {/* Questions List */}
+                <main className="flex-1 max-w-2xl w-full mx-auto space-y-6 z-10 pb-12">
+                    {allQuestions.map((q, idx) => {
+                        const ans = answers[q.id] || { text: '', options: [], associations: {} };
+                        
+                        // Check if section changed to show a section header
+                        const showSecHeader = idx === 0 || allQuestions[idx - 1].seccion_id !== q.seccion_id;
+                        
+                        return (
+                            <div key={q.id} id={`pregunta-container-${q.id}`} className="space-y-4">
+                                {showSecHeader && q.seccion_nombre && (
+                                    <div className="pt-4 pb-2 border-b border-[#b6ecff]/20 dark:border-[#262626]">
+                                        <h3 className="text-xs font-black uppercase tracking-widest text-[#00aae1] flex items-center gap-1.5">
+                                            📁 {q.seccion_nombre}
+                                        </h3>
+                                    </div>
+                                )}
+                                
+                                <div className="w-full glass-panel p-6 border-[#b6ecff] dark:border-[#262626] shadow-xl space-y-4 transition-all hover:border-[#b6ecff]/40 dark:hover:border-[#383838]">
+                                    {/* Question header */}
+                                    <div>
+                                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-[#ff7a39] mb-1 block">
+                                            {q.codigo} {q.obligatoria === 1 ? `* ${t('required')}` : ''}
+                                        </span>
+                                        <h2 className="text-md font-bold text-white dark:text-[#fafafa] leading-snug">
+                                            {q.texto_pregunta}
+                                        </h2>
+                                    </div>
+
+                                    <hr className="border-[#b6ecff]/10 dark:border-[#202020]" />
+
+                                    {/* Question Inputs */}
+                                    <div className="w-full">
+                                        {/* ABIERTA */}
+                                        {q.tipo_codigo === 'ABIERTA' && (
+                                            <textarea
+                                                value={ans.text || ''}
+                                                onChange={(e) => setOpenTextVal(q.id, e.target.value)}
+                                                placeholder={language === 'es' ? 'Escriba su respuesta aquí...' : 'Write your answer here...'}
+                                                rows="3"
+                                                className="w-full p-4 rounded-xl bg-white/40 dark:bg-black/20 border border-[#b6ecff] dark:border-[#262626] text-white dark:text-[#fafafa] placeholder-slate-400 focus:outline-none focus:border-[#00aae1] focus:ring-1 focus:ring-[#00aae1] transition-all text-sm font-medium resize-none"
+                                            />
+                                        )}
+
+                                        {/* UNICA */}
+                                        {q.tipo_codigo === 'UNICA' && (
+                                            <div className="w-full space-y-2">
+                                                {q.opciones && q.opciones.map(op => {
+                                                    const isSelected = ans.options.includes(op.id.toString());
+                                                    return (
+                                                        <div
+                                                            key={op.id}
+                                                            onClick={() => toggleOptionVal(q.id, op.id, true)}
+                                                            className={`w-full p-3.5 rounded-xl border cursor-pointer flex justify-between items-center transition-all ${
+                                                                isSelected 
+                                                                    ? 'bg-[#00aae1]/10 border-[#00aae1] text-[#00aae1] scale-[1.005]' 
+                                                                    : 'bg-white/40 dark:bg-black/10 border-[#b6ecff]/50 dark:border-[#262626] text-white hover:border-[#00aae1]'
+                                                            }`}
+                                                        >
+                                                            <span className="text-xs font-bold">{op.texto_opcion}</span>
+                                                            <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-[#00aae1]' : 'border-slate-500'}`}>
+                                                                {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-[#00aae1]"></div>}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+
+                                        {/* MULTIPLE */}
+                                        {q.tipo_codigo === 'MULTIPLE' && (
+                                            <div className="w-full space-y-2">
+                                                {q.opciones && q.opciones.map(op => {
+                                                    const isSelected = ans.options.includes(op.id.toString());
+                                                    return (
+                                                        <div
+                                                            key={op.id}
+                                                            onClick={() => toggleOptionVal(q.id, op.id, false)}
+                                                            className={`w-full p-3.5 rounded-xl border cursor-pointer flex justify-between items-center transition-all ${
+                                                                isSelected 
+                                                                    ? 'bg-[#01ae6c]/10 border-[#01ae6c] text-[#01ae6c] scale-[1.005]' 
+                                                                    : 'bg-white/40 dark:bg-black/10 border-[#b6ecff]/50 dark:border-[#262626] text-white hover:border-[#01ae6c]'
+                                                            }`}
+                                                        >
+                                                            <span className="text-xs font-bold">{op.texto_opcion}</span>
+                                                            <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${isSelected ? 'border-[#01ae6c] bg-[#01ae6c]' : 'border-slate-500'}`}>
+                                                                {isSelected && <span className="text-white text-[9px] font-bold">✓</span>}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+
+                                        {/* ASOCIATIVA */}
+                                        {q.tipo_codigo === 'ASOCIATIVA' && (
+                                            <div className="w-full space-y-2">
+                                                {q.asociaciones && q.asociaciones.map((a) => {
+                                                    const matched = (ans.associations || {})[a.item_izquierdo] || '';
+                                                    return (
+                                                        <div key={a.id} className="grid grid-cols-2 gap-3 items-center">
+                                                            <div className="p-3 rounded-lg bg-white/20 dark:bg-black/10 border border-[#b6ecff]/20 text-xs font-bold text-white truncate">
+                                                                {a.item_izquierdo}
+                                                            </div>
+                                                            <select
+                                                                value={matched}
+                                                                onChange={(e) => setAssociationVal(q.id, a.item_izquierdo, e.target.value)}
+                                                                className="w-full p-3 rounded-lg bg-white/40 dark:bg-slate-800 border border-[#b6ecff]/40 dark:border-[#262626] text-xs font-semibold text-white focus:outline-none focus:border-[#00aae1]"
+                                                            >
+                                                                <option value="" className="text-slate-800 dark:text-white">-- {t('select')} --</option>
+                                                                {q.asociaciones.map(opt => (
+                                                                    <option key={opt.id} value={opt.item_derecho} className="text-slate-800 dark:text-white">
+                                                                        {opt.item_derecho}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+
+                    {/* Finalize Action Card */}
+                    <div className="w-full glass-panel p-6 border-[#b6ecff] dark:border-[#262626] shadow-xl text-center space-y-4">
+                        <h3 className="text-sm font-bold text-white">{language === 'es' ? '¿Ha finalizado de responder?' : 'Have you finished responding?'}</h3>
+                        <p className="text-xs text-slate-400">{language === 'es' ? 'Asegúrese de responder todas las preguntas obligatorias antes de enviar.' : 'Make sure to answer all required questions before submitting.'}</p>
+                        <button
+                            onClick={handleFinalize}
+                            disabled={savingAnswers}
+                            className="w-full py-4 rounded-xl bg-gradient-to-r from-[#ff7a39] to-[#ff5a1f] hover:from-[#e06020] hover:to-[#e04a14] text-white font-bold text-xs uppercase tracking-wider shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
+                        >
+                            {savingAnswers ? (
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            ) : (
+                                t('finalize')
+                            )}
+                        </button>
+                    </div>
+                </main>
+            </div>
+        );
+    }
+
     // Set default empty answers if unassigned
     const activeAns = answers[activeQuestion.id] || { text: '', options: [], associations: {} };
 
@@ -590,7 +789,7 @@ export default function Responder() {
                         {activeQuestion.tipo_codigo === 'ABIERTA' && (
                             <textarea
                                 value={activeAns.text}
-                                onChange={(e) => setOpenTextVal(e.target.value)}
+                                onChange={(e) => setOpenTextVal(activeQuestion.id, e.target.value)}
                                 placeholder={language === 'es' ? 'Escriba su respuesta aquí...' : 'Write your answer here...'}
                                 rows="4"
                                 className="w-full p-4 rounded-xl bg-white/40 dark:bg-black/20 border border-[#b6ecff] dark:border-[#262626] text-white dark:text-[#fafafa] placeholder-slate-400 focus:outline-none focus:border-[#00aae1] focus:ring-1 focus:ring-[#00aae1] transition-all text-sm font-medium resize-none"
@@ -605,7 +804,7 @@ export default function Responder() {
                                     return (
                                         <div
                                             key={op.id}
-                                            onClick={() => toggleOptionVal(op.id, true)}
+                                            onClick={() => toggleOptionVal(activeQuestion.id, op.id, true)}
                                             className={`w-full p-4 rounded-xl border cursor-pointer flex justify-between items-center transition-all ${
                                                 isSelected 
                                                     ? 'bg-[#00aae1]/10 border-[#00aae1] text-[#00aae1] scale-[1.01]' 
@@ -630,7 +829,7 @@ export default function Responder() {
                                     return (
                                         <div
                                             key={op.id}
-                                            onClick={() => toggleOptionVal(op.id, false)}
+                                            onClick={() => toggleOptionVal(activeQuestion.id, op.id, false)}
                                             className={`w-full p-4 rounded-xl border cursor-pointer flex justify-between items-center transition-all ${
                                                 isSelected 
                                                     ? 'bg-[#01ae6c]/10 border-[#01ae6c] text-[#01ae6c] scale-[1.01]' 
@@ -659,7 +858,7 @@ export default function Responder() {
                                             </div>
                                             <select
                                                 value={matched}
-                                                onChange={(e) => setAssociationVal(a.item_izquierdo, e.target.value)}
+                                                onChange={(e) => setAssociationVal(activeQuestion.id, a.item_izquierdo, e.target.value)}
                                                 className="w-full p-3 rounded-lg bg-white/40 dark:bg-slate-800 border border-[#b6ecff]/40 dark:border-[#262626] text-xs font-semibold text-white focus:outline-none focus:border-[#00aae1]"
                                             >
                                                 <option value="" className="text-slate-800 dark:text-white">-- {t('select')} --</option>

@@ -1340,6 +1340,27 @@ END;`
                 <div><span class="badge">\${isEs ? 'Rangos Clínicos Independientes:' : 'Independent Clinical Ranges:'}</span> \${isEs ? 'Cada dimensión clínica tiene sus propios límites de puntaje y clasificaciones en TKR_RANGOS_INTERPRETACION (ej. Ansiedad Leve 0-5; Ansiedad Severa 15-20), independientes de las demás dimensiones.' : 'Each clinical dimension has its own score limits and classifications in TKR_RANGOS_INTERPRETACION (e.g., Mild Anxiety 0-5; Severe Anxiety 15-20), independent of other dimensions.'}</div>
             </div>
         </div>
+
+        <h2 class="section-title"><span style="color: var(--accent-cyan)">📄</span> \${isEs ? 'Presentación del Cuestionario' : 'Questionnaire Layout'}</h2>
+        
+        <div class="card">
+            <h3><span style="color: var(--accent-cyan)">📄</span> \${isEs ? 'Pregunta por Pregunta (Secuencial)' : 'Question by Question (Sequential)'}</h3>
+            <p>\${isEs ? 'El cuestionario se presenta de forma secuencial: una pregunta (o sección) a la vez. El usuario navega con botones de Anterior y Siguiente. Es ideal para cuestionarios guiados y estructurados.' : 'The questionnaire is presented sequentially: one question (or section) at a time. The user navigates using Previous and Next buttons. It is ideal for guided and structured questionnaires.'}</p>
+            <div class="info-box">
+                <div><span class="badge">\${isEs ? 'Flujos Lógicos:' : 'Logical Flows:'}</span> \${isEs ? 'Totalmente soportados. Permite realizar saltos condicionales de navegación en tiempo real según las respuestas dadas.' : 'Fully supported. Allows real-time conditional navigation jumps based on the answers given.'}</div>
+                <div><span class="badge">\${isEs ? 'Valor en BD:' : 'DB Value:'}</span> PRESENTACION_UNICA = 0 (por defecto)</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3><span style="color: var(--accent-green)">📃</span> \${isEs ? 'Una sola Página (Scroll continuo)' : 'Single Page (Continuous scroll)'}</h3>
+            <p>\${isEs ? 'Todas las preguntas del cuestionario se muestran simultáneamente en una sola página con desplazamiento vertical (scroll). El usuario puede ver y contestar las preguntas en el orden que desee antes de realizar el envío.' : 'All questions in the questionnaire are displayed simultaneously on a single page with vertical scrolling. The user can view and answer the questions in any order before submitting.'}</p>
+            <div class="info-box">
+                <div><span class="badge">\${isEs ? 'Flujos Lógicos:' : 'Logical Flows:'}</span> \${isEs ? 'No se aplican. En este modo de scroll continuo, todos los saltos y flujos condicionales quedan inhabilitados.' : 'Not applied. In this continuous scroll mode, all jumps and conditional flows are disabled.'}</div>
+                <div><span class="badge">\${isEs ? 'Validación:' : 'Validation:'}</span> \${isEs ? 'Al finalizar, el sistema valida todas las preguntas obligatorias y hace un desplazamiento suave (scroll) automático a la primera pregunta sin responder.' : 'Upon completion, the system validates all required questions and automatically performs a smooth scroll to the first unanswered question.'}</div>
+                <div><span class="badge">\${isEs ? 'Valor en BD:' : 'DB Value:'}</span> PRESENTACION_UNICA = 1</div>
+            </div>
+        </div>
     </div>
 </body>
 </html>`;
@@ -1908,6 +1929,18 @@ END;`
                             >
                                 <option value={1} className="bg-slate-100 dark:bg-[#0c1a24] text-slate-850 dark:text-[#fafafa]">{language === 'es' ? 'General' : 'General'}</option>
                                 <option value={2} className="bg-slate-100 dark:bg-[#0c1a24] text-slate-850 dark:text-[#fafafa]">{language === 'es' ? 'Salud Mental (Clínico)' : 'Mental Health (Clinical)'}</option>
+                            </select>
+                        </div>
+                        <div className="shrink-0 flex items-center gap-1.5 text-xs mr-4">
+                            <label className="text-slate-505 dark:text-slate-400 font-semibold">{language === 'es' ? 'Presentación:' : 'Layout:'}</label>
+                            <select
+                                value={cuestionario.presentacion_unica || 0}
+                                onChange={(e) => updateMeta('presentacion_unica', parseInt(e.target.value))}
+                                disabled={isReadOnly}
+                                className="bg-white/40 dark:bg-black/20 border border-[#b6ecff] dark:border-[#262626] rounded px-2.5 py-1 text-[#04354d] dark:text-[#fafafa] focus:outline-none focus:border-[#00aae1] font-bold text-xs"
+                            >
+                                <option value={0} className="bg-slate-100 dark:bg-[#0c1a24] text-slate-850 dark:text-[#fafafa]">{language === 'es' ? 'Pregunta por Pregunta' : 'Question by Question'}</option>
+                                <option value={1} className="bg-slate-100 dark:bg-[#0c1a24] text-slate-850 dark:text-[#fafafa]">{language === 'es' ? 'Una sola Página' : 'Single Page'}</option>
                             </select>
                         </div>
                     </div>
@@ -2901,6 +2934,16 @@ END;`
                         >
                             📋 {language === 'es' ? 'Tipos de Cuestionario' : 'Questionnaire Types'}
                         </button>
+                        <button
+                            onClick={() => setActiveHelpTab('presentacion')}
+                            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
+                                activeHelpTab === 'presentacion'
+                                    ? 'bg-[#06b6d4] text-slate-50'
+                                    : 'hover:bg-[#00aae1]/10 text-slate-700 hover:text-[#00aae1] dark:hover:bg-white/5 text-slate-705 dark:text-slate-300 dark:hover:text-white'
+                            }`}
+                        >
+                            📄 {language === 'es' ? 'Presentación' : 'Layout'}
+                        </button>
                     </div>
 
                     {/* Content Area */}
@@ -3101,6 +3144,44 @@ END;`
                                                 ? 'A diferencia del general, cada dimensión o variable clínica tiene sus propios límites mínimo y máximo y sus propias etiquetas de severidad (ej. Ansiedad Leve de 0-5, Ansiedad Severa de 15-20), independientes de las otras variables del mismo cuestionario.'
                                                 : 'Unlike the general one, each dimension or clinical variable has its own minimum and maximum limits and its own severity labels (e.g., Mild Anxiety 0-5, Severe Anxiety 15-20), independent of other variables in the same questionnaire.'}
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeHelpTab === 'presentacion' && (
+                            <div className="space-y-6">
+                                {/* Pregunta por Pregunta */}
+                                <div className="p-4 rounded-xl bg-white/90 dark:bg-[#0a1e2b]/80 border border-[#00aae1]/20 dark:border-[#06b6d4]/20 space-y-2 shadow-sm">
+                                    <h4 className="text-sm font-bold text-[#04354d] dark:text-[#fafafa] flex items-center gap-2">
+                                        <span className="text-[#00aae1]">📄</span> {language === 'es' ? 'Pregunta por Pregunta (Secuencial)' : 'Question by Question (Sequential)'}
+                                    </h4>
+                                    <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-medium">
+                                        {language === 'es'
+                                            ? 'El cuestionario se presenta de forma secuencial: una pregunta (o sección) a la vez. El usuario navega con botones de Anterior/Siguiente y solo visualiza la pregunta activa. Esta configuración es compatible con flujos condicionales.'
+                                            : 'The questionnaire is presented sequentially: one question (or section) at a time. The user navigates using Previous/Next buttons and only sees the active question. This layout is compatible with logical flows.'}
+                                    </p>
+                                    <div className="text-[11px] text-slate-705 dark:text-slate-300 bg-[#effaff]/90 dark:bg-[#05141e]/90 p-3 rounded-lg space-y-1.5 border border-[#00aae1]/10 dark:border-[#06b6d4]/10">
+                                        <div><span className="text-[#ff7a39] dark:text-[#ffa36c] font-bold">{language === 'es' ? 'Cuándo usar:' : 'When to use:'}</span> {language === 'es' ? 'Cuestionarios largos, evaluaciones complejas con saltos condicionales, o cuando se desea una experiencia de usuario guiada paso a paso.' : 'Long questionnaires, complex assessments with logic jumps, or when a step-by-step guided user experience is preferred.'}</div>
+                                        <div><span className="text-[#ff7a39] dark:text-[#ffa36c] font-bold">{language === 'es' ? 'Base de Datos:' : 'Database:'}</span> {language === 'es' ? 'Columna PRESENTACION_UNICA = 0 (Valor por defecto).' : 'PRESENTACION_UNICA column = 0 (Default value).'}</div>
+                                    </div>
+                                </div>
+
+                                {/* Una sola Página */}
+                                <div className="p-4 rounded-xl bg-white/90 dark:bg-[#0a1e2b]/80 border border-[#00aae1]/20 dark:border-[#06b6d4]/20 space-y-2 shadow-sm">
+                                    <h4 className="text-sm font-bold text-[#01ae6c] flex items-center gap-2">
+                                        <span className="text-[#01ae6c]">📃</span> {language === 'es' ? 'Una sola Página (Scroll continuo)' : 'Single Page (Continuous Scroll)'}
+                                    </h4>
+                                    <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-medium">
+                                        {language === 'es'
+                                            ? 'Todas las preguntas se muestran simultáneamente en una sola página con desplazamiento vertical. El usuario puede ver y responder las preguntas en cualquier orden antes de enviar sus respuestas.'
+                                            : 'All questions are displayed simultaneously on a single page with vertical scrolling. The user can view and answer questions in any order before submitting their responses.'}
+                                    </p>
+                                    <div className="text-[11px] text-slate-705 dark:text-slate-300 bg-[#effaff]/90 dark:bg-[#05141e]/90 p-3 rounded-lg space-y-1.5 border border-[#01ae6c]/15 dark:border-[#01ae6c]/15">
+                                        <div><span className="text-[#ff7a39] dark:text-[#ffa36c] font-bold">{language === 'es' ? 'Cuándo usar:' : 'When to use:'}</span> {language === 'es' ? 'Cuestionarios cortos, formularios demográficos simples o cuando no se requieren saltos condicionales entre preguntas.' : 'Short questionnaires, simple demographic forms, or when logic jumps between questions are not required.'}</div>
+                                        <div><span className="text-[#ff7a39] dark:text-[#ffa36c] font-bold">{language === 'es' ? 'Nota sobre Flujos Lógicos:' : 'Note on Logical Flows:'}</span> {language === 'es' ? 'En este modo, los flujos condicionales NO se aplican ya que todas las preguntas deben estar visibles en pantalla.' : 'In this mode, logical flows are NOT applied since all questions must be visible on screen.'}</div>
+                                        <div><span className="text-[#ff7a39] dark:text-[#ffa36c] font-bold">{language === 'es' ? 'Validación de obligatoriedad:' : 'Required validation:'}</span> {language === 'es' ? 'Al presionar "Finalizar", el sistema valida que todas las preguntas obligatorias tengan respuesta. Si falta alguna, el sistema detiene el envío y realiza un scroll automático a la primera pregunta vacía.' : 'Upon clicking "Finalize", the system validates that all required questions have answers. If any is missing, submission is halted and it automatically scrolls to the first unanswered question.'}</div>
+                                        <div><span className="text-[#ff7a39] dark:text-[#ffa36c] font-bold">{language === 'es' ? 'Base de Datos:' : 'Database:'}</span> {language === 'es' ? 'Columna PRESENTACION_UNICA = 1.' : 'PRESENTACION_UNICA column = 1.'}</div>
                                     </div>
                                 </div>
                             </div>

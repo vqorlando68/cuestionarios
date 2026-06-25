@@ -41,7 +41,7 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
     DBMS_LOB.APPEND(v_clob, '{"success":true,"data":[');
 
     FOR r IN (
-      SELECT c.id, c.nombre, c.descripcion, c.version, c.publicado, c.fecha_creacion, c.fecha_publicacion, c.estado, c.id_tipo_cuestionario
+      SELECT c.id, c.nombre, c.descripcion, c.version, c.publicado, c.fecha_creacion, c.fecha_publicacion, c.estado, c.id_tipo_cuestionario, c.presentacion_unica
       FROM tkr_cuestionarios c
       WHERE c.estado = 1
       ORDER BY c.fecha_creacion DESC
@@ -69,6 +69,7 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
         ',"version":' || NVL(r.version, 1) ||
         ',"publicado":' || NVL(r.publicado, 0) ||
         ',"id_tipo_cuestionario":' || NVL(r.id_tipo_cuestionario, 1) ||
+        ',"presentacion_unica":' || NVL(r.presentacion_unica, 0) ||
         ',"fecha_creacion":"' || TO_CHAR(r.fecha_creacion, 'YYYY-MM-DD"T"HH24:MI:SS') || '"' ||
         ',"fecha_publicacion":' || CASE WHEN r.fecha_publicacion IS NOT NULL THEN '"' || TO_CHAR(r.fecha_publicacion, 'YYYY-MM-DD"T"HH24:MI:SS') || '"' ELSE 'null' END ||
         ',"total_respuestas":' || v_total_respuestas ||
@@ -114,7 +115,7 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
 
     -- Load Questionnaire Metadata
     FOR c IN (
-      SELECT id, nombre, descripcion, version, publicado, fecha_creacion, fecha_publicacion, estado, id_tipo_cuestionario
+      SELECT id, nombre, descripcion, version, publicado, fecha_creacion, fecha_publicacion, estado, id_tipo_cuestionario, presentacion_unica
       FROM tkr_cuestionarios
       WHERE id = v_id_cuestionario AND estado = 1
     ) LOOP
@@ -126,6 +127,7 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
         ',"version":' || NVL(c.version, 1) ||
         ',"publicado":' || NVL(c.publicado, 0) ||
         ',"id_tipo_cuestionario":' || NVL(c.id_tipo_cuestionario, 1) ||
+        ',"presentacion_unica":' || NVL(c.presentacion_unica, 0) ||
         ',"fecha_creacion":"' || TO_CHAR(c.fecha_creacion, 'YYYY-MM-DD"T"HH24:MI:SS') || '"' ||
         ',"fecha_publicacion":' || CASE WHEN c.fecha_publicacion IS NOT NULL THEN '"' || TO_CHAR(c.fecha_publicacion, 'YYYY-MM-DD"T"HH24:MI:SS') || '"' ELSE 'null' END ||
         ',"secciones":[');
@@ -395,6 +397,7 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
     v_publicado NUMBER(1);
     v_version NUMBER;
     v_id_tipo_cuestionario NUMBER;
+    v_presentacion_unica NUMBER(1);
     v_cuest_id NUMBER;
     v_has_responses NUMBER;
 
@@ -540,6 +543,12 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
       v_id_tipo_cuestionario := 1; -- Default to GENERAL
     END IF;
 
+    IF v_input_obj.has('presentacion_unica') AND NOT v_input_obj.get('presentacion_unica').is_null THEN
+      v_presentacion_unica := v_input_obj.get_number('presentacion_unica');
+    ELSE
+      v_presentacion_unica := 0;
+    END IF;
+
     IF v_nombre IS NULL THEN
       p_success := 0;
       p_output := '{"success":false,"error":"El nombre del cuestionario es requerido"}';
@@ -561,37 +570,47 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
             descripcion = v_descripcion,
             publicado = v_publicado,
             id_tipo_cuestionario = v_id_tipo_cuestionario,
+            presentacion_unica = v_presentacion_unica,
             fecha_publicacion = CASE WHEN v_publicado = 1 AND publicado = 0 THEN SYSDATE ELSE fecha_publicacion END
         WHERE id = v_id;
         v_cuest_id := v_id;
 
-        -- Clean up previous child entities
+        -- Clean up previous child entities (orden respetando FKs)
+        -- 1. tkr_rangos_interpretacion: FK -> tkr_variables_calculadas y tkr_cuestionarios
+        DELETE FROM tkr_rangos_interpretacion WHERE id_cuestionario = v_cuest_id;
+        -- 2. tkr_resultados_cuestionario: hijo directo de tkr_cuestionarios
+        DELETE FROM tkr_resultados_cuestionario WHERE id_cuestionario = v_cuest_id;
+        -- 3. tkr_variables_calculadas_det: FK -> tkr_variables_calculadas y tkr_preguntas
+        DELETE FROM tkr_variables_calculadas_det WHERE id_variable_calculada IN (
+          SELECT id FROM tkr_variables_calculadas WHERE id_cuestionario = v_cuest_id
+        );
+        -- 4. tkr_variables_calculadas: ahora libre de hijos
+        DELETE FROM tkr_variables_calculadas WHERE id_cuestionario = v_cuest_id;
+        -- 5. tkr_reglas_flujo: FK -> tkr_flujos_pregunta
         DELETE FROM tkr_reglas_flujo WHERE id_flujo_pregunta IN (
           SELECT fp.id FROM tkr_flujos_pregunta fp, tkr_preguntas p
           WHERE fp.id_pregunta_origen = p.id AND p.id_cuestionario = v_cuest_id
         );
+        -- 6. tkr_flujos_pregunta: FK -> tkr_preguntas
         DELETE FROM tkr_flujos_pregunta WHERE id_pregunta_origen IN (
           SELECT id FROM tkr_preguntas WHERE id_cuestionario = v_cuest_id
         );
+        -- 7. Hijos directos de tkr_preguntas
         DELETE FROM tkr_pregunta_asociativa WHERE id_pregunta IN (
           SELECT id FROM tkr_preguntas WHERE id_cuestionario = v_cuest_id
         );
         DELETE FROM tkr_opciones_pregunta WHERE id_pregunta IN (
           SELECT id FROM tkr_preguntas WHERE id_cuestionario = v_cuest_id
         );
+        -- 8. tkr_preguntas: ahora libre de hijos
         DELETE FROM tkr_preguntas WHERE id_cuestionario = v_cuest_id;
+        -- 9. tkr_secciones_cuestionario: ahora libre de hijos (preguntas ya eliminadas)
         DELETE FROM tkr_secciones_cuestionario WHERE id_cuestionario = v_cuest_id;
-        DELETE FROM tkr_variables_calculadas_det WHERE id_variable_calculada IN (
-          SELECT id FROM tkr_variables_calculadas WHERE id_cuestionario = v_cuest_id
-        );
-        DELETE FROM tkr_variables_calculadas WHERE id_cuestionario = v_cuest_id;
-        DELETE FROM tkr_resultados_cuestionario WHERE id_cuestionario = v_cuest_id;
-        DELETE FROM tkr_rangos_interpretacion WHERE id_cuestionario = v_cuest_id;
     ELSE
         INSERT INTO tkr_cuestionarios (
-          nombre, descripcion, version, publicado, id_tipo_cuestionario, fecha_creacion, estado
+          nombre, descripcion, version, publicado, id_tipo_cuestionario, presentacion_unica, fecha_creacion, estado
         ) VALUES (
-          v_nombre, v_descripcion, v_version, v_publicado, v_id_tipo_cuestionario, SYSDATE, 1
+          v_nombre, v_descripcion, v_version, v_publicado, v_id_tipo_cuestionario, v_presentacion_unica, SYSDATE, 1
         ) RETURNING id INTO v_cuest_id;
     END IF;
 
@@ -997,6 +1016,7 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
     v_orig_nombre VARCHAR2(500);
     v_orig_version NUMBER;
     v_orig_tipo_cuestionario NUMBER;
+    v_orig_presentacion_unica NUMBER(1);
     v_new_version NUMBER;
     v_base_nombre VARCHAR2(500);
     v_new_nombre_generated VARCHAR2(500);
@@ -1012,8 +1032,8 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
     END IF;
 
     -- Retrieve source questionnaire details
-    SELECT nombre, descripcion, version, id_tipo_cuestionario 
-    INTO v_orig_nombre, v_descripcion, v_orig_version, v_orig_tipo_cuestionario
+    SELECT nombre, descripcion, version, id_tipo_cuestionario, presentacion_unica
+    INTO v_orig_nombre, v_descripcion, v_orig_version, v_orig_tipo_cuestionario, v_orig_presentacion_unica
     FROM tkr_cuestionarios
     WHERE id = v_id;
 
@@ -1023,9 +1043,9 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
 
     -- Create duplicate questionnaire entry
     INSERT INTO tkr_cuestionarios (
-      nombre, descripcion, version, publicado, id_tipo_cuestionario, fecha_creacion, estado
+      nombre, descripcion, version, publicado, id_tipo_cuestionario, presentacion_unica, fecha_creacion, estado
     ) VALUES (
-      NVL(v_new_nombre, v_new_nombre_generated), v_descripcion, v_new_version, 0, v_orig_tipo_cuestionario, SYSDATE, 1
+      NVL(v_new_nombre, v_new_nombre_generated), v_descripcion, v_new_version, 0, v_orig_tipo_cuestionario, v_orig_presentacion_unica, SYSDATE, 1
     ) RETURNING id INTO v_new_cuest_id;
 
     -- Duplicate sections and maintain association maps
@@ -1221,6 +1241,24 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
       p_success := 0;
       p_output := '{"success":false,"error":"Parámetro id_cuestionario es requerido"}';
       RETURN;
+    END IF;
+
+    -- Si es una sesión de previsualización (id_usuario IS NULL),
+    -- borrar sesiones anteriores de preview para este cuestionario para evitar acumulación de datos
+    IF v_id_usuario IS NULL THEN
+      DELETE FROM tkr_respuesta_opciones
+      WHERE id_respuesta IN (
+        SELECT r.id FROM tkr_respuestas r
+        JOIN tkr_cuestionario_respuesta cr ON r.id_cuestionario_respuesta = cr.id
+        WHERE cr.id_cuestionario = v_id_cuestionario AND cr.id_usuario IS NULL
+      );
+      DELETE FROM tkr_respuestas
+      WHERE id_cuestionario_respuesta IN (
+        SELECT id FROM tkr_cuestionario_respuesta
+        WHERE id_cuestionario = v_id_cuestionario AND id_usuario IS NULL
+      );
+      DELETE FROM tkr_cuestionario_respuesta
+      WHERE id_cuestionario = v_id_cuestionario AND id_usuario IS NULL;
     END IF;
 
     -- Insert into responses instance tracker

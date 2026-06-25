@@ -52,180 +52,235 @@ export default function Dashboard() {
                 columns: [
                     { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único autoincremental.', descEn: 'Unique autoincrement identifier.' },
                     { name: 'nombre', type: 'VARCHAR2(500)', required: true, descEs: 'Nombre o título del cuestionario.', descEn: 'Name or title of the questionnaire.' },
-                    { name: 'descripcion', type: 'CLOB', required: false, descEs: 'Descripción detallada o instrucciones.', descEn: 'Detailed description or instructions.' },
-                    { name: 'version', type: 'NUMBER', required: true, descEs: 'Número de versión secuencial.', descEn: 'Sequential version number.' },
-                    { name: 'publicado', type: 'NUMBER(1)', required: true, descEs: 'Indicador de publicación (1 = Publicado, 0 = Borrador).', descEn: 'Publication indicator (1 = Published, 0 = Draft).' },
-                    { name: 'fecha_creacion', type: 'DATE', required: true, descEs: 'Fecha de creación del cuestionario.', descEn: 'Date when the questionnaire was created.' },
-                    { name: 'fecha_publicacion', type: 'DATE', required: false, descEs: 'Fecha de la última publicación.', descEn: 'Date of the last publication.' },
-                    { name: 'id_tipo_cuestionario', type: 'NUMBER (FK)', required: false, descEs: 'ID del tipo de cuestionario asociado en TKR_TIPOS_CUESTIONARIO (ej. 1 = General, 2 = Salud Mental).', descEn: 'ID of the questionnaire type associated in TKR_TIPOS_CUESTIONARIO (e.g. 1 = General, 2 = Mental Health).' },
-                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado/Inactivo).', descEn: 'Logical status (1 = Active, 0 = Deleted/Inactive).' }
+                    { name: 'descripcion', type: 'CLOB', required: false, descEs: 'Descripción detallada o instrucciones generales del cuestionario.', descEn: 'Detailed description or general instructions.' },
+                    { name: 'version', type: 'NUMBER', required: false, descEs: 'Número de versión secuencial del cuestionario.', descEn: 'Sequential version number of the questionnaire.' },
+                    { name: 'publicado', type: 'NUMBER(1)', required: false, descEs: 'Indicador de publicación (1 = Publicado y disponible, 0 = Borrador).', descEn: 'Publication indicator (1 = Published, 0 = Draft).' },
+                    { name: 'fecha_creacion', type: 'DATE', required: false, descEs: 'Fecha y hora de creación del cuestionario.', descEn: 'Creation date and time of the questionnaire.' },
+                    { name: 'fecha_publicacion', type: 'DATE', required: false, descEs: 'Fecha de la última publicación del cuestionario.', descEn: 'Date of the last publication.' },
+                    { name: 'estado', type: 'NUMBER(1)', required: false, descEs: 'Estado lógico del registro (1 = Activo, 0 = Eliminado/Inactivo).', descEn: 'Logical status (1 = Active, 0 = Deleted/Inactive).' },
+                    { name: 'id_tipo_cuestionario', type: 'NUMBER (FK)', required: false, descEs: 'ID del tipo de cuestionario en TKR_TIPOS_CUESTIONARIO (ej. GENERAL, SALUD_MENTAL). Habilita configuraciones específicas por tipo clínico.', descEn: 'ID of the questionnaire type in TKR_TIPOS_CUESTIONARIO (e.g. GENERAL, SALUD_MENTAL). Enables type-specific clinical configurations.' },
+                    { name: 'presentacion_unica', type: 'NUMBER(1)', required: true, descEs: 'Define la presentación al diligenciar: 1 = Todas las preguntas en una sola página con scroll continuo. 0 = Secuencial, una pregunta o sección a la vez (default).', descEn: 'Defines layout when filling out: 1 = All questions on one scrollable page. 0 = Sequential, one question/section at a time (default).' }
                 ]
             },
             tkr_tipos_cuestionario: {
                 type: 'table',
                 name: 'TKR_TIPOS_CUESTIONARIO',
-                descEs: 'Catálogo de clasificación de tipos de cuestionario para habilitar flujos o configuraciones específicas (ej. General, Salud Mental).',
-                descEn: 'Catalog classification of questionnaire types to enable specific flows or configurations (e.g. General, Mental Health).',
+                descEs: 'Catálogo maestro de clasificación de tipos de cuestionario. Permite activar flujos clínicos, variables y configuraciones específicas según el tipo (ej. GENERAL, SALUD_MENTAL, MEDICINA, RIESGO).',
+                descEn: 'Master catalog for questionnaire type classification. Enables clinical flows, variables, and specific configurations per type (e.g. GENERAL, SALUD_MENTAL, MEDICINA, RIESGO).',
                 columns: [
                     { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único del tipo de cuestionario.', descEn: 'Unique type identifier.' },
-                    { name: 'codigo', type: 'VARCHAR2(50)', required: true, descEs: 'Código único de identificación (ej. GENERAL, SALUD_MENTAL).', descEn: 'Unique identification code (e.g. GENERAL, SALUD_MENTAL).' },
-                    { name: 'nombre', type: 'VARCHAR2(200)', required: true, descEs: 'Nombre descriptivo del tipo de cuestionario.', descEn: 'Descriptive name of the questionnaire type.' },
-                    { name: 'descripcion', type: 'VARCHAR2(1000)', required: false, descEs: 'Descripción detallada de la finalidad de este tipo.', descEn: 'Detailed description of this type\'s purpose.' },
-                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Inactivo).', descEn: 'Logical status (1 = Active, 0 = Inactive).' }
+                    { name: 'codigo', type: 'VARCHAR2(100)', required: true, descEs: 'Código único de identificación del tipo (ej. GENERAL, SALUD_MENTAL, MEDICINA, RIESGO).', descEn: 'Unique type code (e.g. GENERAL, SALUD_MENTAL, MEDICINA, RIESGO).' },
+                    { name: 'nombre', type: 'VARCHAR2(200)', required: true, descEs: 'Nombre descriptivo o etiqueta del tipo de cuestionario.', descEn: 'Descriptive name or label for the questionnaire type.' },
+                    { name: 'descripcion', type: 'VARCHAR2(1000)', required: false, descEs: 'Descripción clínica de la finalidad y alcance de este tipo.', descEn: 'Clinical description of the purpose and scope of this type.' },
+                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Inactivo). Default: 1.', descEn: 'Logical status (1 = Active, 0 = Inactive). Default: 1.' }
                 ]
             },
             tkr_secciones_cuestionario: {
                 type: 'table',
                 name: 'TKR_SECCIONES_CUESTIONARIO',
-                descEs: 'Define las secciones, páginas o categorías que agrupan preguntas de un cuestionario.',
-                descEn: 'Defines the sections, pages, or categories grouping questions within a questionnaire.',
+                descEs: 'Define las secciones, páginas o categorías que agrupan preguntas dentro de un cuestionario. En modo secuencial, cada sección representa una pantalla independiente.',
+                descEn: 'Defines the sections, pages, or categories grouping questions within a questionnaire. In sequential mode, each section represents an independent screen.',
                 columns: [
                     { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único de la sección.', descEn: 'Unique section identifier.' },
                     { name: 'id_cuestionario', type: 'NUMBER (FK)', required: true, descEs: 'ID del cuestionario asociado en TKR_CUESTIONARIOS.', descEn: 'ID of the associated questionnaire in TKR_CUESTIONARIOS.' },
-                    { name: 'nombre', type: 'VARCHAR2(300)', required: true, descEs: 'Nombre de la sección.', descEn: 'Name of the section.' },
-                    { name: 'descripcion', type: 'VARCHAR2(1000)', required: false, descEs: 'Explicación corta o instrucciones de la sección.', descEn: 'Short description or instructions of the section.' },
-                    { name: 'orden_visual', type: 'NUMBER', required: true, descEs: 'Orden visual de renderizado en el cuestionario.', descEn: 'Visual rendering order in the questionnaire.' },
-                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado).', descEn: 'Logical status (1 = Active, 0 = Deleted).' }
+                    { name: 'nombre', type: 'VARCHAR2(300)', required: false, descEs: 'Nombre visible de la sección (ej. "Datos Generales", "Síntomas").', descEn: 'Visible name of the section (e.g. "General Data", "Symptoms").' },
+                    { name: 'descripcion', type: 'VARCHAR2(1000)', required: false, descEs: 'Instrucciones o descripción breve de la sección mostrada al diligenciador.', descEn: 'Short description or instructions shown to the respondent.' },
+                    { name: 'orden_visual', type: 'NUMBER', required: false, descEs: 'Orden secuencial de renderizado en el cuestionario (ascendente).', descEn: 'Sequential rendering order in the questionnaire (ascending).' },
+                    { name: 'estado', type: 'NUMBER(1)', required: false, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado).', descEn: 'Logical status (1 = Active, 0 = Deleted).' }
                 ]
             },
             tkr_preguntas: {
                 type: 'table',
                 name: 'TKR_PREGUNTAS',
-                descEs: 'Registra el catálogo de preguntas asociadas a los cuestionarios y secciones.',
-                descEn: 'Registers the catalog of questions associated with questionnaires and sections.',
+                descEs: 'Catálogo de preguntas asociadas a los cuestionarios y sus secciones. Soporta múltiples tipos: ABIERTA, UNICA, MULTIPLE, NUMERICA, FECHA, ASOCIATIVA.',
+                descEn: 'Catalog of questions associated with questionnaires and their sections. Supports multiple types: ABIERTA, UNICA, MULTIPLE, NUMERICA, FECHA, ASOCIATIVA.',
                 columns: [
                     { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único de la pregunta.', descEn: 'Unique question identifier.' },
-                    { name: 'id_cuestionario', type: 'NUMBER (FK)', required: true, descEs: 'ID del cuestionario relacionado.', descEn: 'ID of the related questionnaire.' },
-                    { name: 'id_seccion_cuestionario', type: 'NUMBER (FK)', required: false, descEs: 'ID de la sección donde pertenece (si aplica).', descEn: 'ID of the section it belongs to (if applicable).' },
-                    { name: 'id_tipo_pregunta', type: 'NUMBER (FK)', required: true, descEs: 'ID del tipo de pregunta en TKR_TIPOS_PREGUNTA.', descEn: 'ID of the question type in TKR_TIPOS_PREGUNTA.' },
-                    { name: 'codigo', type: 'VARCHAR2(100)', required: true, descEs: 'Código visual corto de la pregunta (ej. P1, P2).', descEn: 'Short visual code of the question (e.g. P1, P2).' },
-                    { name: 'texto_pregunta', type: 'CLOB', required: true, descEs: 'Texto o enunciado completo de la pregunta.', descEn: 'Full text or prompt of the question.' },
-                    { name: 'orden_visual', type: 'NUMBER', required: true, descEs: 'Orden secuencial de aparición.', descEn: 'Sequential display order.' },
-                    { name: 'obligatoria', type: 'NUMBER(1)', required: true, descEs: 'Indica si responder es mandatorio (1 = Sí, 0 = No).', descEn: 'Indicates if answering is mandatory (1 = Yes, 0 = No).' },
-                    { name: 'valor_pregunta', type: 'NUMBER', required: false, descEs: 'Puntaje base de la pregunta.', descEn: 'Base score of the question.' },
-                    { name: 'permite_otro', type: 'NUMBER(1)', required: false, descEs: 'Permite opción "Otro" de texto libre en selección única/múltiple.', descEn: 'Allows free-text "Other" option in single/multiple choice.' },
-                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado).', descEn: 'Logical status (1 = Active, 0 = Deleted).' }
+                    { name: 'id_cuestionario', type: 'NUMBER (FK)', required: true, descEs: 'ID del cuestionario al que pertenece.', descEn: 'ID of the questionnaire it belongs to.' },
+                    { name: 'id_seccion_cuestionario', type: 'NUMBER (FK)', required: false, descEs: 'ID de la sección donde se agrupa (si aplica).', descEn: 'ID of the grouping section (if applicable).' },
+                    { name: 'id_tipo_pregunta', type: 'NUMBER (FK)', required: true, descEs: 'ID del tipo de pregunta (ABIERTA, UNICA, MULTIPLE, NUMERICA, FECHA, ASOCIATIVA).', descEn: 'ID of the question type (ABIERTA, UNICA, MULTIPLE, NUMERICA, FECHA, ASOCIATIVA).' },
+                    { name: 'codigo', type: 'VARCHAR2(100)', required: false, descEs: 'Código visual corto de la pregunta (ej. P1, P2). Usado en variables calculadas y flujos.', descEn: 'Short visual code of the question (e.g. P1, P2). Used in calculated variables and flows.' },
+                    { name: 'texto_pregunta', type: 'CLOB', required: false, descEs: 'Texto o enunciado completo de la pregunta tal como aparece al diligenciador.', descEn: 'Full text or prompt of the question as shown to the respondent.' },
+                    { name: 'orden_visual', type: 'NUMBER', required: false, descEs: 'Orden secuencial de aparición dentro de la sección.', descEn: 'Sequential display order within the section.' },
+                    { name: 'obligatoria', type: 'NUMBER(1)', required: false, descEs: 'Indica si responder es obligatorio (1 = Sí, 0 = No). Las obligatorias bloquean el avance o envío.', descEn: 'Indicates if answering is mandatory (1 = Yes, 0 = No). Mandatory ones block progress or submission.' },
+                    { name: 'valor_pregunta', type: 'NUMBER', required: false, descEs: 'Puntaje base de la pregunta para cálculos de puntaje global.', descEn: 'Base score of the question for global score calculations.' },
+                    { name: 'permite_otro', type: 'NUMBER(1)', required: false, descEs: 'Permite opción de texto libre "Otro" en preguntas UNICA o MULTIPLE (1 = Sí, 0 = No).', descEn: 'Allows free-text "Other" option in UNICA or MULTIPLE questions (1 = Yes, 0 = No).' },
+                    { name: 'estado', type: 'NUMBER(1)', required: false, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado).', descEn: 'Logical status (1 = Active, 0 = Deleted).' }
                 ]
             },
             tkr_opciones_pregunta: {
                 type: 'table',
                 name: 'TKR_OPCIONES_PREGUNTA',
-                descEs: 'Opciones de respuesta precargadas para preguntas de selección única o múltiple.',
-                descEn: 'Preloaded answer choices for single or multiple selection questions.',
+                descEs: 'Opciones de respuesta predefinidas para preguntas de tipo UNICA o MULTIPLE. Cada opción puede tener un valor numérico que contribuye al puntaje final.',
+                descEn: 'Predefined answer choices for UNICA or MULTIPLE type questions. Each option can have a numeric value contributing to the final score.',
                 columns: [
-                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador de la opción.', descEn: 'Unique option identifier.' },
-                    { name: 'id_pregunta', type: 'NUMBER (FK)', required: true, descEs: 'ID de la pregunta relacionada.', descEn: 'ID of the related question.' },
-                    { name: 'texto_opcion', type: 'VARCHAR2(4000)', required: true, descEs: 'Texto visible de la opción.', descEn: 'Visible option text.' },
-                    { name: 'codigo_opcion', type: 'VARCHAR2(100)', required: true, descEs: 'Código identificador de la opción (ej. OP1).', descEn: 'Option identifier code (e.g. OP1).' },
-                    { name: 'orden_visual', type: 'NUMBER', required: true, descEs: 'Posición de renderizado en la lista.', descEn: 'Rendering position in the list.' },
-                    { name: 'valor_opcion', type: 'NUMBER', required: false, descEs: 'Puntaje acumulativo otorgado al seleccionar esta opción.', descEn: 'Cumulative score awarded when choosing this option.' },
-                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado).', descEn: 'Logical status (1 = Active, 0 = Deleted).' }
+                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único de la opción de respuesta.', descEn: 'Unique answer option identifier.' },
+                    { name: 'id_pregunta', type: 'NUMBER (FK)', required: true, descEs: 'ID de la pregunta a la que pertenece esta opción.', descEn: 'ID of the question this option belongs to.' },
+                    { name: 'texto_opcion', type: 'VARCHAR2(4000)', required: false, descEs: 'Texto visible de la opción mostrado al diligenciador.', descEn: 'Visible option text shown to the respondent.' },
+                    { name: 'codigo_opcion', type: 'VARCHAR2(100)', required: false, descEs: 'Código identificador único de la opción (ej. OP1, OP2).', descEn: 'Unique identifier code of the option (e.g. OP1, OP2).' },
+                    { name: 'orden_visual', type: 'NUMBER', required: false, descEs: 'Posición de renderizado en la lista de opciones.', descEn: 'Rendering position in the options list.' },
+                    { name: 'valor_opcion', type: 'NUMBER', required: false, descEs: 'Puntaje acumulativo asignado al seleccionar esta opción (puede ser negativo).', descEn: 'Cumulative score assigned when choosing this option (can be negative).' },
+                    { name: 'estado', type: 'NUMBER(1)', required: false, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado).', descEn: 'Logical status (1 = Active, 0 = Deleted).' }
                 ]
             },
             tkr_pregunta_asociativa: {
                 type: 'table',
                 name: 'TKR_PREGUNTA_ASOCIATIVA',
-                descEs: 'Definición de pares o correspondencias para preguntas de emparejamiento (matching).',
-                descEn: 'Definition of pairs or matchings for matching-type questions.',
+                descEs: 'Define los pares de emparejamiento para preguntas de tipo ASOCIATIVA (matching). Cada fila es un par Columna A → Columna B que el usuario debe relacionar.',
+                descEn: 'Defines matching pairs for ASOCIATIVA (matching) type questions. Each row is a Column A → Column B pair the user must relate.',
                 columns: [
-                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único del emparejamiento.', descEn: 'Unique matching pair identifier.' },
-                    { name: 'id_pregunta', type: 'NUMBER (FK)', required: true, descEs: 'ID de la pregunta de tipo ASOCIATIVA relacionada.', descEn: 'ID of the associated matching question.' },
-                    { name: 'item_izquierdo', type: 'VARCHAR2(1000)', required: true, descEs: 'Elemento de la columna izquierda (Columna A).', descEn: 'Element of the left column (Column A).' },
-                    { name: 'item_derecho', type: 'VARCHAR2(1000)', required: true, descEs: 'Elemento correspondiente de la columna derecha (Columna B).', descEn: 'Corresponding element of the right column (Column B).' },
-                    { name: 'valor_correcto', type: 'NUMBER', required: false, descEs: 'Puntaje que se otorga si se relaciona este par correctamente.', descEn: 'Score awarded if this pair is correctly matched.' },
-                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado).', descEn: 'Logical status (1 = Active, 0 = Deleted).' }
+                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único del par de emparejamiento.', descEn: 'Unique matching pair identifier.' },
+                    { name: 'id_pregunta', type: 'NUMBER (FK)', required: true, descEs: 'ID de la pregunta de tipo ASOCIATIVA relacionada.', descEn: 'ID of the related ASOCIATIVA type question.' },
+                    { name: 'item_izquierdo', type: 'VARCHAR2(1000)', required: false, descEs: 'Elemento de la columna izquierda (Columna A) — el estímulo.', descEn: 'Element of the left column (Column A) — the stimulus.' },
+                    { name: 'item_derecho', type: 'VARCHAR2(1000)', required: false, descEs: 'Elemento correspondiente de la columna derecha (Columna B) — la respuesta correcta.', descEn: 'Corresponding element of the right column (Column B) — the correct answer.' },
+                    { name: 'valor_correcto', type: 'NUMBER', required: false, descEs: 'Puntaje otorgado cuando se empareja este par correctamente.', descEn: 'Score awarded when this pair is correctly matched.' },
+                    { name: 'estado', type: 'NUMBER(1)', required: false, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado).', descEn: 'Logical status (1 = Active, 0 = Deleted).' }
                 ]
             },
             tkr_variables_calculadas: {
                 type: 'table',
                 name: 'TKR_VARIABLES_CALCULADAS',
-                descEs: 'Define las variables clínicas, sub-escalas o dimensiones de cálculo para evaluaciones de tipo Salud Mental.',
-                descEn: 'Defines the clinical variables, sub-scales, or calculation dimensions for Mental Health type evaluations.',
+                descEs: 'Define las variables clínicas, sub-escalas o dimensiones de puntuación de un cuestionario (ej. DEPRESION_TOTAL, ANSIEDAD_TOTAL). Cada variable agrega los valores de un subconjunto de preguntas definido en TKR_VARIABLES_CALCULADAS_DET.',
+                descEn: 'Defines clinical variables, sub-scales, or scoring dimensions for a questionnaire (e.g. DEPRESION_TOTAL, ANSIEDAD_TOTAL). Each variable aggregates values from a subset of questions defined in TKR_VARIABLES_CALCULADAS_DET.',
                 columns: [
                     { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único de la variable calculada.', descEn: 'Unique calculated variable identifier.' },
-                    { name: 'id_cuestionario', type: 'NUMBER (FK)', required: true, descEs: 'ID del cuestionario asociado en TKR_CUESTIONARIOS.', descEn: 'ID of the associated questionnaire in TKR_CUESTIONARIOS.' },
-                    { name: 'codigo', type: 'VARCHAR2(100)', required: true, descEs: 'Código visual corto de la variable (ej. VAR_DEP).', descEn: 'Short visual code of the variable (e.g. VAR_DEP).' },
-                    { name: 'nombre', type: 'VARCHAR2(500)', required: true, descEs: 'Nombre formal o título de la dimensión clínica.', descEn: 'Formal name or title of the clinical dimension.' },
-                    { name: 'descripcion', type: 'VARCHAR2(1000)', required: false, descEs: 'Descripción clínica detallada de lo que mide esta variable.', descEn: 'Detailed clinical description of what this variable measures.' },
-                    { name: 'formula_calculo', type: 'VARCHAR2(1000)', required: false, descEs: 'Fórmula de agregación matemática (por defecto: SUM).', descEn: 'Mathematical aggregation formula (default: SUM).' },
-                    { name: 'orden_visual', type: 'NUMBER', required: true, descEs: 'Posición de ordenamiento en los resultados clínicos.', descEn: 'Sorting order position in clinical results.' },
-                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado).', descEn: 'Logical status (1 = Active, 0 = Deleted).' }
+                    { name: 'id_cuestionario', type: 'NUMBER (FK)', required: true, descEs: 'ID del cuestionario al que pertenece esta variable.', descEn: 'ID of the questionnaire this variable belongs to.' },
+                    { name: 'codigo', type: 'VARCHAR2(100)', required: true, descEs: 'Código único de la variable (ej. DEPRESION_TOTAL, RIESGO_SUICIDA). Usado en rangos de interpretación.', descEn: 'Unique variable code (e.g. DEPRESION_TOTAL, RIESGO_SUICIDA). Used in interpretation ranges.' },
+                    { name: 'nombre', type: 'VARCHAR2(200)', required: true, descEs: 'Nombre formal o título de la dimensión clínica.', descEn: 'Formal name or title of the clinical dimension.' },
+                    { name: 'descripcion', type: 'VARCHAR2(1000)', required: false, descEs: 'Descripción clínica de lo que mide esta variable.', descEn: 'Clinical description of what this variable measures.' },
+                    { name: 'formula_calculo', type: 'VARCHAR2(1000)', required: false, descEs: 'Fórmula de agregación matemática aplicada a los pesos (SUM, AVG, MAX, MIN). Default: SUM.', descEn: 'Mathematical aggregation formula applied to weights (SUM, AVG, MAX, MIN). Default: SUM.' },
+                    { name: 'valor_minimo', type: 'NUMBER', required: false, descEs: 'Valor teórico mínimo posible de la variable (usado en UI de rangos).', descEn: 'Theoretical minimum value of the variable (used in range UI).' },
+                    { name: 'valor_maximo', type: 'NUMBER', required: false, descEs: 'Valor teórico máximo posible de la variable (usado en UI de rangos).', descEn: 'Theoretical maximum value of the variable (used in range UI).' },
+                    { name: 'unidad_medida', type: 'VARCHAR2(100)', required: false, descEs: 'Unidad de la variable (ej. puntos, %, nivel).', descEn: 'Unit of the variable (e.g. points, %, level).' },
+                    { name: 'orden_visual', type: 'NUMBER', required: true, descEs: 'Posición de ordenamiento en el reporte de resultados clínicos. Default: 1.', descEn: 'Sorting order in the clinical results report. Default: 1.' },
+                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado). Default: 1.', descEn: 'Logical status (1 = Active, 0 = Deleted). Default: 1.' },
+                    { name: 'fecha_creacion', type: 'DATE', required: true, descEs: 'Fecha y hora de creación del registro. Default: SYSDATE.', descEn: 'Creation date and time. Default: SYSDATE.' }
                 ]
             },
             tkr_variables_calculadas_det: {
                 type: 'table',
                 name: 'TKR_VARIABLES_CALCULADAS_DET',
-                descEs: 'Detalle asociativo de las preguntas y ponderaciones (pesos) asignadas para el cálculo de cada variable clínica.',
-                descEn: 'Associative details of the questions and weights assigned for the calculation of each clinical variable.',
+                descEs: 'Detalle asociativo de las preguntas que componen cada variable calculada, con sus respectivos pesos (coeficientes). FK: FK_TKR_VC_DET_PREGUNTA → TKR_PREGUNTAS.',
+                descEn: 'Associative detail of the questions composing each calculated variable, with their respective weights (coefficients). FK: FK_TKR_VC_DET_PREGUNTA → TKR_PREGUNTAS.',
                 columns: [
-                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único de la regla.', descEn: 'Unique detail rule identifier.' },
+                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único de la regla de detalle.', descEn: 'Unique detail rule identifier.' },
                     { name: 'id_variable_calculada', type: 'NUMBER (FK)', required: true, descEs: 'ID de la variable cabecera en TKR_VARIABLES_CALCULADAS.', descEn: 'ID of the header variable in TKR_VARIABLES_CALCULADAS.' },
-                    { name: 'id_pregunta', type: 'NUMBER (FK)', required: true, descEs: 'ID de la pregunta de TKR_PREGUNTAS asociada a la variable.', descEn: 'ID of the question from TKR_PREGUNTAS associated with the variable.' },
-                    { name: 'peso', type: 'NUMBER', required: true, descEs: 'Ponderador o coeficiente multiplicador aplicado al valor de la respuesta (ej. 1, 1.5, -2).', descEn: 'Weight or multiplier coefficient applied to the answer value (e.g. 1, 1.5, -2).' },
-                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado).', descEn: 'Logical status (1 = Active, 0 = Deleted).' }
+                    { name: 'id_pregunta', type: 'NUMBER (FK)', required: true, descEs: 'ID de la pregunta de TKR_PREGUNTAS cuyo valor se incluye en el cálculo. FK: FK_TKR_VC_DET_PREGUNTA.', descEn: 'ID of the question from TKR_PREGUNTAS whose value is included in the calculation. FK: FK_TKR_VC_DET_PREGUNTA.' },
+                    { name: 'peso', type: 'NUMBER', required: true, descEs: 'Ponderador multiplicador aplicado al valor de la respuesta de la pregunta (ej. 1, 1.5, -2). Default: 1.', descEn: 'Multiplier weight applied to the question\'s answer value (e.g. 1, 1.5, -2). Default: 1.' },
+                    { name: 'orden_visual', type: 'NUMBER', required: true, descEs: 'Posición de ordenamiento de la pregunta dentro de la variable. Default: 1.', descEn: 'Sorting order of the question within the variable. Default: 1.' },
+                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado). Default: 1.', descEn: 'Logical status (1 = Active, 0 = Deleted). Default: 1.' }
                 ]
             },
             tkr_rangos_interpretacion: {
                 type: 'table',
                 name: 'TKR_RANGOS_INTERPRETACION',
-                descEs: 'Define los rangos de interpretación específicos que se asocian a las puntuaciones obtenidas en las variables clínicas.',
-                descEn: 'Defines the specific interpretation ranges associated with scores obtained in clinical variables.',
+                descEs: 'Define los rangos de interpretación clínica para las puntuaciones de las variables calculadas de un cuestionario. Permite mapear un puntaje numérico a una clasificación (ej. Depresión Leve, Severa). FK: FK_TKR_RANGOS_INTERP_VAR_CALC → TKR_VARIABLES_CALCULADAS.',
+                descEn: 'Defines the clinical interpretation ranges for calculated variable scores in a questionnaire. Maps a numeric score to a classification (e.g. Mild Depression, Severe). FK: FK_TKR_RANGOS_INTERP_VAR_CALC → TKR_VARIABLES_CALCULADAS.',
                 columns: [
-                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único del rango.', descEn: 'Unique range identifier.' },
-                    { name: 'id_cuestionario', type: 'NUMBER (FK)', required: true, descEs: 'ID del cuestionario relacionado.', descEn: 'ID of the related questionnaire.' },
-                    { name: 'id_variable_calculada', type: 'NUMBER (FK)', required: false, descEs: 'ID de la variable calculada asociada en TKR_VARIABLES_CALCULADAS (ej. DEPRESION_TOTAL).', descEn: 'ID of the associated calculated variable in TKR_VARIABLES_CALCULADAS (e.g. DEPRESION_TOTAL).' },
-                    { name: 'valor_minimo', type: 'NUMBER', required: true, descEs: 'Límite de puntaje mínimo inclusivo para este rango.', descEn: 'Inclusive minimum score limit for this range.' },
-                    { name: 'valor_maximo', type: 'NUMBER', required: true, descEs: 'Límite de puntaje máximo inclusivo para este rango.', descEn: 'Inclusive maximum score limit for this range.' },
-                    { name: 'clasificacion', type: 'VARCHAR2(500)', required: true, descEs: 'Clasificación o etiqueta de interpretación clínica (ej. Leve, Severa).', descEn: 'Clinical interpretation classification or tag (e.g. Mild, Severe).' },
-                    { name: 'descripcion', type: 'VARCHAR2(1000)', required: false, descEs: 'Explicación detallada del significado clínico de este rango y recomendaciones.', descEn: 'Detailed explanation of the clinical meaning of this range and recommendations.' },
-                    { name: 'color_visual', type: 'VARCHAR2(100)', required: true, descEs: 'Color semántico utilizado para el badge de resultados (green, orange, red, blue, grey).', descEn: 'Semantic color used for the result badge (green, orange, red, blue, grey).' },
-                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado).', descEn: 'Logical status (1 = Active, 0 = Deleted).' },
-                    { name: 'nombre_rango', type: 'VARCHAR2(500)', required: true, descEs: 'Título o identificador corto del rango de interpretación.', descEn: 'Title or short identifier of the interpretation range.' }
+                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único del rango de interpretación.', descEn: 'Unique interpretation range identifier.' },
+                    { name: 'id_cuestionario', type: 'NUMBER (FK)', required: true, descEs: 'ID del cuestionario al que pertenece este rango.', descEn: 'ID of the questionnaire this range belongs to.' },
+                    { name: 'id_variable_calculada', type: 'NUMBER (FK)', required: false, descEs: 'ID de la variable calculada en TKR_VARIABLES_CALCULADAS (ej. DEPRESION_TOTAL, RIESGO_SUICIDA). Si es NULL, el rango se aplica al puntaje global del cuestionario. FK: FK_TKR_RANGOS_INTERP_VAR_CALC.', descEn: 'ID of the calculated variable in TKR_VARIABLES_CALCULADAS (e.g. DEPRESION_TOTAL). If NULL, range applies to the questionnaire global score. FK: FK_TKR_RANGOS_INTERP_VAR_CALC.' },
+                    { name: 'nombre_rango', type: 'VARCHAR2(200)', required: true, descEs: 'Título o etiqueta corta del rango (ej. "Depresión Leve", "Riesgo Alto").', descEn: 'Short title or label of the range (e.g. "Mild Depression", "High Risk").' },
+                    { name: 'valor_minimo', type: 'NUMBER', required: true, descEs: 'Límite inferior inclusivo del rango de puntaje.', descEn: 'Inclusive lower bound of the score range.' },
+                    { name: 'valor_maximo', type: 'NUMBER', required: true, descEs: 'Límite superior inclusivo del rango de puntaje.', descEn: 'Inclusive upper bound of the score range.' },
+                    { name: 'clasificacion', type: 'VARCHAR2(200)', required: true, descEs: 'Clasificación clínica o diagnóstica del rango (ej. Leve, Moderada, Severa).', descEn: 'Clinical or diagnostic classification of the range (e.g. Mild, Moderate, Severe).' },
+                    { name: 'descripcion', type: 'VARCHAR2(1000)', required: false, descEs: 'Explicación del significado clínico y recomendaciones para este rango de puntaje.', descEn: 'Explanation of clinical meaning and recommendations for this score range.' },
+                    { name: 'color_visual', type: 'VARCHAR2(50)', required: false, descEs: 'Color semántico del badge de resultados (green, orange, red, blue, grey).', descEn: 'Semantic badge color for results (green, orange, red, blue, grey).' },
+                    { name: 'orden_visual', type: 'NUMBER', required: true, descEs: 'Posición de ordenamiento para el reporte de resultados. Default: 1.', descEn: 'Sorting position for the results report. Default: 1.' },
+                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado). Default: 1.', descEn: 'Logical status (1 = Active, 0 = Deleted). Default: 1.' },
+                    { name: 'fecha_creacion', type: 'DATE', required: true, descEs: 'Fecha y hora de creación del registro. Default: SYSDATE.', descEn: 'Creation date and time. Default: SYSDATE.' }
+                ]
+            },
+            tkr_resultados_cuestionario: {
+                type: 'table',
+                name: 'TKR_RESULTADOS_CUESTIONARIO',
+                descEs: 'Define resultados globales o descriptivos por rango de puntaje total del cuestionario (diferente a TKR_RANGOS_INTERPRETACION que es por variable). Permite mostrar mensajes o diagnósticos generales al finalizar.',
+                descEn: 'Defines global or descriptive results by total questionnaire score range (distinct from TKR_RANGOS_INTERPRETACION which is per variable). Allows showing general messages or diagnoses upon completion.',
+                columns: [
+                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único del resultado.', descEn: 'Unique result identifier.' },
+                    { name: 'id_cuestionario', type: 'NUMBER (FK)', required: false, descEs: 'ID del cuestionario al que pertenece este resultado global.', descEn: 'ID of the questionnaire this global result belongs to.' },
+                    { name: 'puntaje_desde', type: 'NUMBER', required: false, descEs: 'Puntaje mínimo inclusivo para activar este resultado.', descEn: 'Inclusive minimum score to trigger this result.' },
+                    { name: 'puntaje_hasta', type: 'NUMBER', required: false, descEs: 'Puntaje máximo inclusivo para activar este resultado.', descEn: 'Inclusive maximum score to trigger this result.' },
+                    { name: 'nombre_resultado', type: 'VARCHAR2(500)', required: false, descEs: 'Etiqueta del resultado (ej. "Riesgo Bajo", "Diagnóstico Positivo").', descEn: 'Result label (e.g. "Low Risk", "Positive Diagnosis").' },
+                    { name: 'descripcion', type: 'CLOB', required: false, descEs: 'Descripción detallada, diagnóstico o recomendaciones del resultado.', descEn: 'Detailed description, diagnosis, or recommendations for this result.' },
+                    { name: 'color', type: 'VARCHAR2(30)', required: false, descEs: 'Color semántico del resultado para la interfaz visual.', descEn: 'Semantic color for the result in the visual interface.' },
+                    { name: 'estado', type: 'NUMBER(1)', required: false, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado).', descEn: 'Logical status (1 = Active, 0 = Deleted).' }
+                ]
+            },
+            tkr_flujos_pregunta: {
+                type: 'table',
+                name: 'TKR_FLUJOS_PREGUNTA',
+                descEs: 'Define las reglas de flujo condicional (branching logic) entre preguntas. Permite saltar a preguntas diferentes según la respuesta del usuario. Cada flujo conecta una pregunta origen con una pregunta destino.',
+                descEn: 'Defines conditional flow rules (branching logic) between questions. Allows jumping to different questions based on user responses. Each flow connects a source question to a target question.',
+                columns: [
+                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único del flujo condicional.', descEn: 'Unique conditional flow identifier.' },
+                    { name: 'id_pregunta_origen', type: 'NUMBER (FK)', required: true, descEs: 'ID de la pregunta que activa el flujo (la que se evalúa).', descEn: 'ID of the question that triggers the flow (the one being evaluated).' },
+                    { name: 'id_opcion_respuesta', type: 'NUMBER (FK)', required: false, descEs: 'ID de la opción de respuesta específica que dispara el flujo (para UNICA/MULTIPLE).', descEn: 'ID of the specific answer option that triggers the flow (for UNICA/MULTIPLE).' },
+                    { name: 'id_operador', type: 'NUMBER (FK)', required: false, descEs: 'ID del operador de comparación (=, !=, >, <, etc.) para evaluación de valor.', descEn: 'ID of the comparison operator (=, !=, >, <, etc.) for value evaluation.' },
+                    { name: 'valor_comparacion', type: 'VARCHAR2(4000)', required: false, descEs: 'Valor contra el que se compara la respuesta en el operador.', descEn: 'Value to compare against the answer using the operator.' },
+                    { name: 'id_pregunta_destino', type: 'NUMBER (FK)', required: true, descEs: 'ID de la pregunta a la que se redirige si se cumple la condición.', descEn: 'ID of the question to redirect to if the condition is met.' },
+                    { name: 'prioridad', type: 'NUMBER', required: false, descEs: 'Prioridad de evaluación del flujo (menor número = mayor prioridad).', descEn: 'Evaluation priority of the flow (lower number = higher priority).' },
+                    { name: 'estado', type: 'NUMBER(1)', required: false, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado).', descEn: 'Logical status (1 = Active, 0 = Deleted).' }
+                ]
+            },
+            tkr_reglas_flujo: {
+                type: 'table',
+                name: 'TKR_REGLAS_FLUJO',
+                descEs: 'Reglas compuestas adicionales asociadas a un flujo de pregunta. Permite construir condiciones complejas (AND/OR) que deben evaluarse para activar el flujo.',
+                descEn: 'Additional compound rules associated with a question flow. Enables building complex (AND/OR) conditions that must be evaluated to activate the flow.',
+                columns: [
+                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único de la regla.', descEn: 'Unique rule identifier.' },
+                    { name: 'id_flujo_pregunta', type: 'NUMBER (FK)', required: true, descEs: 'ID del flujo padre en TKR_FLUJOS_PREGUNTA.', descEn: 'ID of the parent flow in TKR_FLUJOS_PREGUNTA.' },
+                    { name: 'campo_evaluado', type: 'VARCHAR2(100)', required: false, descEs: 'Campo o variable de la respuesta a evaluar.', descEn: 'Response field or variable to evaluate.' },
+                    { name: 'operador', type: 'VARCHAR2(30)', required: false, descEs: 'Operador de comparación (=, !=, >, <, CONTAINS, etc.).', descEn: 'Comparison operator (=, !=, >, <, CONTAINS, etc.).' },
+                    { name: 'valor_esperado', type: 'VARCHAR2(4000)', required: false, descEs: 'Valor esperado contra el que se evalúa el campo.', descEn: 'Expected value against which the field is evaluated.' },
+                    { name: 'agrupador', type: 'VARCHAR2(10)', required: false, descEs: 'Operador lógico para encadenar con la siguiente regla (AND, OR).', descEn: 'Logical operator to chain with the next rule (AND, OR).' },
+                    { name: 'estado', type: 'NUMBER(1)', required: false, descEs: 'Estado lógico (1 = Activo, 0 = Eliminado).', descEn: 'Logical status (1 = Active, 0 = Deleted).' }
                 ]
             },
             tkr_cuestionario_respuesta: {
                 type: 'table',
                 name: 'TKR_CUESTIONARIO_RESPUESTA',
-                descEs: 'Cabecera de las respuestas o intentos de resolución por sesión del diligenciador.',
-                descEn: 'Header for user answers or attempt sessions in the filler system.',
+                descEs: 'Cabecera de cada sesión de respuesta o intento de diligenciamiento. Una fila por cada vez que un usuario inicia el cuestionario. Si id_usuario es NULL, es una sesión de previsualización del administrador (se auto-elimina en la siguiente previsualización).',
+                descEn: 'Header for each response session or filling attempt. One row per each time a user starts the questionnaire. If id_usuario is NULL, it is an admin preview session (auto-deleted on next preview).',
                 columns: [
-                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único de la sesión de respuestas.', descEn: 'Unique answer session identifier.' },
-                    { name: 'id_cuestionario', type: 'NUMBER (FK)', required: true, descEs: 'ID del cuestionario respondido.', descEn: 'ID of the answered questionnaire.' },
-                    { name: 'id_usuario', type: 'NUMBER', required: false, descEs: 'ID del usuario/médico que completó el cuestionario.', descEn: 'ID of the user/doctor who completed the questionnaire.' },
-                    { name: 'fecha_inicio', type: 'DATE', required: true, descEs: 'Fecha y hora exactas de inicio de la sesión.', descEn: 'Exact start date and time of the session.' },
-                    { name: 'fecha_fin', type: 'DATE', required: false, descEs: 'Fecha y hora de finalización (NULO si la sesión sigue en borrador).', descEn: 'End date and time (NULL if session is still a draft).' },
-                    { name: 'puntaje_total', type: 'NUMBER', required: false, descEs: 'Puntaje acumulativo total alcanzado.', descEn: 'Total cumulative score reached.' },
-                    { name: 'clasificacion_final', type: 'VARCHAR2(500)', required: false, descEs: 'Categoría final mapeada del puntaje (ej. Riesgo Severo).', descEn: 'Final score classification category (e.g. Severe Risk).' },
-                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado de la sesión (1 = Finalizado, 2 = En proceso/Borrador).', descEn: 'Session state (1 = Completed, 2 = In progress/Draft).' }
+                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único de la sesión de respuestas.', descEn: 'Unique response session identifier.' },
+                    { name: 'id_cuestionario', type: 'NUMBER (FK)', required: false, descEs: 'ID del cuestionario respondido en TKR_CUESTIONARIOS.', descEn: 'ID of the answered questionnaire in TKR_CUESTIONARIOS.' },
+                    { name: 'id_usuario', type: 'NUMBER', required: false, descEs: 'ID del usuario que completó el cuestionario. NULL indica sesión de previsualización del administrador.', descEn: 'ID of the user who completed the questionnaire. NULL indicates an admin preview session.' },
+                    { name: 'fecha_inicio', type: 'DATE', required: false, descEs: 'Fecha y hora exactas de inicio de la sesión de respuesta.', descEn: 'Exact start date and time of the response session.' },
+                    { name: 'fecha_fin', type: 'DATE', required: false, descEs: 'Fecha y hora de finalización de la sesión. NULL si sigue en borrador.', descEn: 'End date and time of the session. NULL if still in draft.' },
+                    { name: 'puntaje_total', type: 'NUMBER', required: false, descEs: 'Puntaje acumulativo total obtenido al finalizar.', descEn: 'Total cumulative score obtained upon completion.' },
+                    { name: 'clasificacion_final', type: 'VARCHAR2(500)', required: false, descEs: 'Categoría final del puntaje mapeada desde TKR_RANGOS_INTERPRETACION (ej. Riesgo Severo).', descEn: 'Final score classification category mapped from TKR_RANGOS_INTERPRETACION (e.g. Severe Risk).' },
+                    { name: 'estado', type: 'NUMBER(1)', required: false, descEs: 'Estado de la sesión (0 = En proceso/Borrador, 1 = Finalizado y enviado).', descEn: 'Session state (0 = In progress/Draft, 1 = Completed and submitted).' }
                 ]
             },
             tkr_respuestas: {
                 type: 'table',
                 name: 'TKR_RESPUESTAS',
-                descEs: 'Almacena la respuesta individual del usuario para cada pregunta del cuestionario.',
-                descEn: 'Stores the individual user response for each question in the questionnaire.',
+                descEs: 'Almacena la respuesta individual del usuario para cada pregunta de la sesión. Una fila por pregunta respondida.',
+                descEn: 'Stores the individual user response for each question in the session. One row per answered question.',
                 columns: [
-                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador de la respuesta.', descEn: 'Unique answer identifier.' },
-                    { name: 'id_cuestionario_respuesta', type: 'NUMBER (FK)', required: true, descEs: 'ID de la sesión de respuestas cabecera.', descEn: 'ID of the header response session.' },
-                    { name: 'id_pregunta', type: 'NUMBER (FK)', required: true, descEs: 'ID de la pregunta respondida.', descEn: 'ID of the answered question.' },
-                    { name: 'respuesta_texto', type: 'CLOB', required: false, descEs: 'Respuesta en texto (texto libre para ABIERTA, o mapeo JSON de parejas para ASOCIATIVA).', descEn: 'Text answer (free text for OPEN, or JSON map of matching pairs for MATCHING).' },
-                    { name: 'respuesta_numero', type: 'NUMBER', required: false, descEs: 'Respuesta numérica.', descEn: 'Numeric answer.' },
-                    { name: 'respuesta_fecha', type: 'DATE', required: false, descEs: 'Respuesta en formato fecha.', descEn: 'Date-format answer.' },
-                    { name: 'valor_obtenido', type: 'NUMBER', required: false, descEs: 'Puntaje obtenido individualmente en esta pregunta.', descEn: 'Score obtained individually on this question.' },
-                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado de la respuesta (1 = Activo).', descEn: 'Answer status (1 = Active).' }
+                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único de la respuesta individual.', descEn: 'Unique individual answer identifier.' },
+                    { name: 'id_cuestionario_respuesta', type: 'NUMBER (FK)', required: false, descEs: 'ID de la sesión de respuestas en TKR_CUESTIONARIO_RESPUESTA.', descEn: 'ID of the response session in TKR_CUESTIONARIO_RESPUESTA.' },
+                    { name: 'id_pregunta', type: 'NUMBER (FK)', required: false, descEs: 'ID de la pregunta respondida en TKR_PREGUNTAS.', descEn: 'ID of the answered question in TKR_PREGUNTAS.' },
+                    { name: 'respuesta_texto', type: 'CLOB', required: false, descEs: 'Respuesta en texto libre (ABIERTA), o JSON de mapeo de pares para ASOCIATIVA ({"izq":"der"}).', descEn: 'Free-text answer (ABIERTA), or JSON pair map for ASOCIATIVA ({"left":"right"}).' },
+                    { name: 'respuesta_numero', type: 'NUMBER', required: false, descEs: 'Respuesta numérica (para preguntas NUMERICA).', descEn: 'Numeric answer (for NUMERICA type questions).' },
+                    { name: 'respuesta_fecha', type: 'DATE', required: false, descEs: 'Respuesta en formato fecha (para preguntas FECHA).', descEn: 'Date-format answer (for FECHA type questions).' },
+                    { name: 'valor_obtenido', type: 'NUMBER', required: false, descEs: 'Puntaje individual calculado para esta respuesta.', descEn: 'Individual calculated score for this answer.' },
+                    { name: 'estado', type: 'NUMBER(1)', required: false, descEs: 'Estado de la respuesta (1 = Activo).', descEn: 'Answer status (1 = Active).' }
                 ]
             },
             tkr_respuesta_opciones: {
                 type: 'table',
                 name: 'TKR_RESPUESTA_OPCIONES',
-                descEs: 'Detalle asociativo para registrar múltiples opciones seleccionadas en preguntas de selección múltiple (o única).',
-                descEn: 'Associative details for registering multiple choices selected in multiple-choice questions.',
+                descEs: 'Detalle de las opciones seleccionadas en preguntas UNICA o MULTIPLE. Una fila por cada opción marcada. Se usa junto con TKR_RESPUESTAS.',
+                descEn: 'Details of the options selected in UNICA or MULTIPLE questions. One row per selected option. Used together with TKR_RESPUESTAS.',
                 columns: [
-                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único de la fila.', descEn: 'Unique row identifier.' },
-                    { name: 'id_respuesta', type: 'NUMBER (FK)', required: true, descEs: 'ID de la respuesta en TKR_RESPUESTAS.', descEn: 'ID of the answer in TKR_RESPUESTAS.' },
-                    { name: 'id_opcion_pregunta', type: 'NUMBER (FK)', required: true, descEs: 'ID de la opción seleccionada de TKR_OPCIONES_PREGUNTA.', descEn: 'ID of the chosen option from TKR_OPCIONES_PREGUNTA.' },
-                    { name: 'valor_obtenido', type: 'NUMBER', required: false, descEs: 'Valor de puntos sumados por esta opción específica.', descEn: 'Score value added by this specific option.' },
-                    { name: 'estado', type: 'NUMBER(1)', required: true, descEs: 'Estado de la opción (1 = Activo).', descEn: 'Option status (1 = Active).' }
+                    { name: 'id', type: 'NUMBER (PK)', required: true, descEs: 'Identificador único de la fila de opción seleccionada.', descEn: 'Unique selected option row identifier.' },
+                    { name: 'id_respuesta', type: 'NUMBER (FK)', required: false, descEs: 'ID de la respuesta cabecera en TKR_RESPUESTAS.', descEn: 'ID of the header answer in TKR_RESPUESTAS.' },
+                    { name: 'id_opcion_pregunta', type: 'NUMBER (FK)', required: false, descEs: 'ID de la opción seleccionada en TKR_OPCIONES_PREGUNTA.', descEn: 'ID of the selected option in TKR_OPCIONES_PREGUNTA.' },
+                    { name: 'valor_obtenido', type: 'NUMBER', required: false, descEs: 'Puntaje sumado por esta opción específica seleccionada.', descEn: 'Score added by this specific selected option.' },
+                    { name: 'estado', type: 'NUMBER(1)', required: false, descEs: 'Estado de la fila (1 = Activo).', descEn: 'Row status (1 = Active).' }
                 ]
             },
             sql_metricas_dashboard: {
