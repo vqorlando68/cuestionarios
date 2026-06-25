@@ -339,6 +339,7 @@ END;`
     const [dragOverIdx, setDragOverIdx] = useState(null);
     // useRef so the drag source index survives re-renders without stale closures
     const dragSrcIdxRef = useRef(null);
+    const initialCuestionarioRef = useRef(null);
 
 
 
@@ -363,7 +364,9 @@ END;`
                     resultados_clinicos: data.resultados_clinicos || [],
                     resultados: data.resultados || []
                 };
-                setCuestionario(syncQuestionCodes(normalized));
+                const synced = syncQuestionCodes(normalized);
+                setCuestionario(synced);
+                initialCuestionarioRef.current = JSON.stringify(synced);
                 if (normalized.secciones.length > 0) {
                     setActiveSectionId(normalized.secciones[0].id);
                 }
@@ -613,6 +616,25 @@ END;`
         } else {
             await alert(language === 'es' ? 'Error al guardar: ' + res.error : 'Save failed: ' + res.error);
         }
+    };
+
+    const handleBackToDashboard = async () => {
+        const isDirty = cuestionario && initialCuestionarioRef.current && JSON.stringify(cuestionario) !== initialCuestionarioRef.current;
+        if (isDirty) {
+            const wantToSave = await confirm(language === 'es'
+                ? 'Tiene cambios sin guardar en el cuestionario. ¿Desea guardarlos antes de salir?'
+                : 'You have unsaved changes in the questionnaire. Do you want to save them before leaving?');
+            if (wantToSave) {
+                await handleSave();
+                return;
+            } else {
+                const wantToDiscard = await confirm(language === 'es'
+                    ? '¿Está seguro de que desea salir y descartar todos los cambios?'
+                    : 'Are you sure you want to leave and discard all changes?');
+                if (!wantToDiscard) return;
+            }
+        }
+        router.push('/admin/dashboard');
     };
 
     const handleDeleteCuestionario = async () => {
@@ -1898,7 +1920,7 @@ END;`
             <header className="glass-panel mx-4 mt-4 px-6 py-3 flex flex-wrap justify-between items-center z-10 border-[#b6ecff] dark:border-[#262626]">
                 <div className="flex items-center gap-3 flex-1 min-w-0 mr-4">
                     <button 
-                        onClick={() => router.push('/admin/dashboard')}
+                        onClick={handleBackToDashboard}
                         className="p-2 rounded-lg border border-[#b6ecff] dark:border-[#262626] text-xs font-bold hover:border-[#ff7a39] hover:bg-[#ff7a39]/10 text-slate-700 dark:text-slate-200 hover:text-[#ff7a39] dark:hover:text-[#ff7a39] transition-all"
                     >
                         ⬅️
