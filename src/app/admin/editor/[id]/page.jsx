@@ -2606,7 +2606,7 @@ END;`
                                                                 value={v.codigo || ''}
                                                                 onChange={(e) => updateClinicalVariable(v.id, 'codigo', e.target.value.toUpperCase())}
                                                                 readOnly={isReadOnly}
-                                                                className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs font-bold text-[#04354d] dark:text-[#fafafa]"
+                                                                className="w-full px-2 py-1 rounded bg-white/40 dark:bg-slate-900/60 border border-[#c084fc]/20 dark:border-slate-800 text-xs font-bold text-[#04354d] dark:text-slate-100 focus:outline-none focus:border-[#c084fc] transition-all"
                                                             />
                                                         </div>
                                                         <div>
@@ -2616,7 +2616,7 @@ END;`
                                                                 value={v.nombre || ''}
                                                                 onChange={(e) => updateClinicalVariable(v.id, 'nombre', e.target.value)}
                                                                 readOnly={isReadOnly}
-                                                                className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs font-semibold text-[#04354d] dark:text-[#fafafa]"
+                                                                className="w-full px-2 py-1 rounded bg-white/40 dark:bg-slate-900/60 border border-[#c084fc]/20 dark:border-slate-800 text-xs font-semibold text-[#04354d] dark:text-slate-100 focus:outline-none focus:border-[#c084fc] transition-all"
                                                             />
                                                         </div>
                                                     </div>
@@ -2627,8 +2627,8 @@ END;`
                                                             value={v.descripcion || ''}
                                                             onChange={(e) => updateClinicalVariable(v.id, 'descripcion', e.target.value)}
                                                             readOnly={isReadOnly}
-                                                            rows="2"
-                                                            className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa] resize-none"
+                                                            rows="3"
+                                                            className="w-full px-2 py-1 rounded bg-white/40 dark:bg-slate-900/60 border border-[#c084fc]/20 dark:border-slate-800 text-xs text-[#04354d] dark:text-slate-200 resize-none focus:outline-none focus:border-[#c084fc] transition-all"
                                                         />
                                                     </div>
 
@@ -2648,16 +2648,16 @@ END;`
 
                                                         <div className="space-y-2">
                                                             {(v.preguntas_asociadas || []).map((assoc) => (
-                                                                <div key={assoc.id} className="flex items-center gap-1.5 bg-white/60 dark:bg-black/30 p-1.5 rounded-lg border border-[#c084fc]/10">
+                                                                <div key={assoc.id} className="flex items-center gap-1.5 bg-white/60 dark:bg-slate-900/40 p-1.5 rounded-lg border border-[#c084fc]/10 dark:border-slate-800">
                                                                     <select
                                                                         value={assoc.id_pregunta || ''}
                                                                         onChange={(e) => updateClinicalVariableQuestion(v.id, assoc.id, 'id_pregunta', parseInt(e.target.value) || '')}
                                                                         disabled={isReadOnly}
-                                                                        className="flex-1 px-1.5 py-0.5 rounded bg-white dark:bg-[#071724] border border-[#c084fc]/20 dark:border-[#262626] text-xs text-slate-800 dark:text-slate-200"
+                                                                        className="flex-1 px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-[#c084fc]/20 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#c084fc] transition-all"
                                                                     >
-                                                                        <option value="">-- {language === 'es' ? 'Pregunta' : 'Question'} --</option>
+                                                                        <option value="" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">-- {language === 'es' ? 'Pregunta' : 'Question'} --</option>
                                                                         {allQuestionsList.map(q => (
-                                                                            <option key={q.id} value={q.id}>
+                                                                            <option key={q.id} value={q.id} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
                                                                                 {q.codigo} ({q.texto_pregunta.slice(0, 20)}...)
                                                                             </option>
                                                                         ))}
@@ -2670,7 +2670,7 @@ END;`
                                                                             onChange={(e) => updateClinicalVariableQuestion(v.id, assoc.id, 'peso', parseFloat(e.target.value) || 0)}
                                                                             readOnly={isReadOnly}
                                                                             placeholder="peso"
-                                                                            className="w-full px-1.5 py-0.5 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs font-bold text-center text-slate-800 dark:text-[#fafafa]"
+                                                                            className="w-full px-1.5 py-0.5 rounded bg-white/40 dark:bg-slate-900/60 border border-[#c084fc]/20 dark:border-slate-800 text-xs font-bold text-center text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#c084fc] transition-all"
                                                                             title="Peso / Multiplicador"
                                                                         />
                                                                     </div>
@@ -2730,11 +2730,11 @@ END;`
                                                             value={res.id_variable_calculada || ''}
                                                             onChange={(e) => updateClinicalRange(res.id, 'id_variable_calculada', e.target.value ? parseInt(e.target.value) : null)}
                                                             disabled={isReadOnly}
-                                                            className="w-full px-2 py-1 rounded bg-white dark:bg-[#071724] border border-[#c084fc]/20 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa] font-bold"
+                                                            className="w-full px-2 py-1 rounded bg-white dark:bg-slate-900 border border-[#c084fc]/20 dark:border-slate-800 text-xs text-[#04354d] dark:text-slate-100 font-bold focus:outline-none focus:border-[#c084fc] transition-all"
                                                         >
-                                                            <option value="">{language === 'es' ? '-- Seleccionar Variable --' : '-- Select Variable --'}</option>
+                                                            <option value="" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">{language === 'es' ? '-- Seleccionar Variable --' : '-- Select Variable --'}</option>
                                                             {(cuestionario.variables || []).map(v => (
-                                                                <option key={v.id} value={v.id}>{v.nombre} ({v.codigo})</option>
+                                                                <option key={v.id} value={v.id} className="bg-white dark:bg-slate-900 text-slate-850 dark:text-slate-100">{v.nombre} ({v.codigo})</option>
                                                             ))}
                                                         </select>
                                                     </div>
@@ -2748,7 +2748,7 @@ END;`
                                                                 onChange={(e) => updateClinicalRange(res.id, 'nombre_rango', e.target.value)}
                                                                 readOnly={isReadOnly}
                                                                 placeholder="Ej. Moderado"
-                                                                className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa] font-bold"
+                                                                className="w-full px-2 py-1 rounded bg-white/40 dark:bg-slate-900/60 border border-[#c084fc]/20 dark:border-slate-800 text-xs text-[#04354d] dark:text-slate-100 font-bold focus:outline-none focus:border-[#c084fc] transition-all"
                                                             />
                                                         </div>
                                                         <div>
@@ -2757,35 +2757,35 @@ END;`
                                                                 value={res.color_visual || 'green'}
                                                                 onChange={(e) => updateClinicalRange(res.id, 'color_visual', e.target.value)}
                                                                 disabled={isReadOnly}
-                                                                className="w-full px-2 py-1 rounded bg-white dark:bg-[#071724] border border-[#c084fc]/20 dark:border-[#262626] text-xs text-[#04354d] dark:text-slate-200"
+                                                                className="w-full px-2 py-1 rounded bg-white dark:bg-slate-900 border border-[#c084fc]/20 dark:border-slate-800 text-xs text-[#04354d] dark:text-slate-100 font-semibold focus:outline-none focus:border-[#c084fc] transition-all"
                                                             >
-                                                                <option value="green">Verde</option>
-                                                                <option value="orange">Naranja</option>
-                                                                <option value="red">Rojo</option>
-                                                                <option value="blue">Azul</option>
+                                                                <option value="green" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">Verde</option>
+                                                                <option value="orange" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">Naranja</option>
+                                                                <option value="red" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">Rojo</option>
+                                                                <option value="blue" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">Azul</option>
                                                             </select>
                                                         </div>
                                                     </div>
 
                                                     <div className="grid grid-cols-2 gap-2">
                                                         <div>
-                                                            <label className="block text-[9px] font-semibold text-slate-650 dark:text-slate-400 mb-0.5">{language === 'es' ? 'Mínimo' : 'Min Score'}</label>
+                                                            <label className="block text-[9px] font-semibold text-slate-655 dark:text-slate-400 mb-0.5">{language === 'es' ? 'Mínimo' : 'Min Score'}</label>
                                                             <input
                                                                 type="number"
                                                                 value={res.valor_minimo}
                                                                 onChange={(e) => updateClinicalRange(res.id, 'valor_minimo', parseInt(e.target.value) || 0)}
                                                                 readOnly={isReadOnly}
-                                                                className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs font-bold text-[#04354d] dark:text-[#fafafa]"
+                                                                className="w-full px-2 py-1 rounded bg-white/40 dark:bg-slate-900/60 border border-[#c084fc]/20 dark:border-slate-800 text-xs font-bold text-[#04354d] dark:text-slate-100 focus:outline-none focus:border-[#c084fc] transition-all"
                                                             />
                                                         </div>
                                                         <div>
-                                                            <label className="block text-[9px] font-semibold text-slate-650 dark:text-slate-400 mb-0.5">{language === 'es' ? 'Máximo' : 'Max Score'}</label>
+                                                            <label className="block text-[9px] font-semibold text-slate-655 dark:text-slate-400 mb-0.5">{language === 'es' ? 'Máximo' : 'Max Score'}</label>
                                                             <input
                                                                 type="number"
                                                                 value={res.valor_maximo}
                                                                 onChange={(e) => updateClinicalRange(res.id, 'valor_maximo', parseInt(e.target.value) || 0)}
                                                                 readOnly={isReadOnly}
-                                                                className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs font-bold text-[#04354d] dark:text-[#fafafa]"
+                                                                className="w-full px-2 py-1 rounded bg-white/40 dark:bg-slate-900/60 border border-[#c084fc]/20 dark:border-slate-800 text-xs font-bold text-[#04354d] dark:text-slate-100 focus:outline-none focus:border-[#c084fc] transition-all"
                                                             />
                                                         </div>
                                                     </div>
@@ -2798,7 +2798,7 @@ END;`
                                                             onChange={(e) => updateClinicalRange(res.id, 'clasificacion', e.target.value)}
                                                             readOnly={isReadOnly}
                                                             placeholder="Ej. Depresión Moderada"
-                                                            className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa] font-semibold"
+                                                            className="w-full px-2 py-1 rounded bg-white/40 dark:bg-slate-900/60 border border-[#c084fc]/20 dark:border-slate-800 text-xs text-[#04354d] dark:text-slate-100 font-semibold focus:outline-none focus:border-[#c084fc] transition-all"
                                                         />
                                                     </div>
 
@@ -2809,7 +2809,7 @@ END;`
                                                             onChange={(e) => updateClinicalRange(res.id, 'descripcion', e.target.value)}
                                                             readOnly={isReadOnly}
                                                             rows="3"
-                                                            className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa] resize-none"
+                                                            className="w-full px-2 py-1 rounded bg-white/40 dark:bg-slate-900/60 border border-[#c084fc]/20 dark:border-slate-800 text-xs text-[#04354d] dark:text-slate-200 resize-none focus:outline-none focus:border-[#c084fc] transition-all"
                                                         />
                                                     </div>
                                                 </div>
@@ -2850,13 +2850,13 @@ END;`
                                             
                                             <div className="grid grid-cols-2 gap-2">
                                                 <div>
-                                                    <label className="block text-[9px] font-semibold text-slate-650 dark:text-slate-400 mb-0.5">{language === 'es' ? 'Mínimo' : 'Min'}</label>
+                                                    <label className="block text-[9px] font-semibold text-slate-655 dark:text-slate-400 mb-0.5">{language === 'es' ? 'Mínimo' : 'Min'}</label>
                                                     <input
                                                         type="number"
                                                         value={res.puntaje_desde}
                                                         onChange={(e) => updateResultClassification(res.id, 'puntaje_desde', parseInt(e.target.value) || 0)}
                                                         readOnly={isReadOnly}
-                                                        className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#b6ecff]/50 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa]"
+                                                        className="w-full px-2 py-1 rounded bg-white/40 dark:bg-slate-900/60 border border-[#b6ecff]/50 dark:border-slate-800 text-xs text-[#04354d] dark:text-slate-100 font-bold focus:outline-none focus:border-[#ff7a39] transition-all"
                                                     />
                                                 </div>
                                                 <div>
@@ -2866,7 +2866,7 @@ END;`
                                                         value={res.puntaje_hasta}
                                                         onChange={(e) => updateResultClassification(res.id, 'puntaje_hasta', parseInt(e.target.value) || 0)}
                                                         readOnly={isReadOnly}
-                                                        className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#b6ecff]/50 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa]"
+                                                        className="w-full px-2 py-1 rounded bg-white/40 dark:bg-slate-900/60 border border-[#b6ecff]/50 dark:border-slate-800 text-xs text-[#04354d] dark:text-slate-100 font-bold focus:outline-none focus:border-[#ff7a39] transition-all"
                                                     />
                                                 </div>
                                             </div>
@@ -2878,7 +2878,7 @@ END;`
                                                     value={res.nombre_resultado}
                                                     onChange={(e) => updateResultClassification(res.id, 'nombre_resultado', e.target.value)}
                                                     readOnly={isReadOnly}
-                                                    className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#b6ecff]/50 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa]"
+                                                    className="w-full px-2 py-1 rounded bg-white/40 dark:bg-slate-900/60 border border-[#b6ecff]/50 dark:border-slate-800 text-xs text-[#04354d] dark:text-slate-100 font-semibold focus:outline-none focus:border-[#ff7a39] transition-all"
                                                 />
                                             </div>
 
@@ -2889,12 +2889,12 @@ END;`
                                                         value={res.color}
                                                         onChange={(e) => updateResultClassification(res.id, 'color', e.target.value)}
                                                         disabled={isReadOnly}
-                                                        className="w-full px-2 py-1 rounded bg-white dark:bg-[#071724] border border-[#b6ecff]/50 dark:border-[#262626] text-xs text-[#04354d] dark:text-slate-200"
+                                                        className="w-full px-2 py-1 rounded bg-white dark:bg-slate-900 border border-[#b6ecff]/50 dark:border-slate-800 text-xs text-[#04354d] dark:text-slate-100 font-semibold focus:outline-none focus:border-[#ff7a39] transition-all"
                                                     >
-                                                        <option value="green" className="bg-[#effaff] dark:bg-[#121c24] text-[#04354d] dark:text-slate-200">Verde</option>
-                                                        <option value="orange" className="bg-[#effaff] dark:bg-[#121c24] text-[#04354d] dark:text-slate-200">Naranja</option>
-                                                        <option value="red" className="bg-[#effaff] dark:bg-[#121c24] text-[#04354d] dark:text-slate-200">Rojo</option>
-                                                        <option value="blue" className="bg-[#effaff] dark:bg-[#121c24] text-[#04354d] dark:text-slate-200">Azul</option>
+                                                        <option value="green" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">Verde</option>
+                                                        <option value="orange" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">Naranja</option>
+                                                        <option value="red" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">Rojo</option>
+                                                        <option value="blue" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">Azul</option>
                                                     </select>
                                                 </div>
                                             </div>
