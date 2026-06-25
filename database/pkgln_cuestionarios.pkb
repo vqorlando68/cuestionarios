@@ -502,7 +502,7 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
     v_secciones JSON_ARRAY_T;
 
     -- Question ID Mapping for clinical variable questions detail
-    TYPE t_preg_id_map IS TABLE OF NUMBER INDEX BY PLS_INTEGER;
+    TYPE t_preg_id_map IS TABLE OF NUMBER INDEX BY VARCHAR2(100);
     v_preg_id_map t_preg_id_map;
     v_seccion JSON_OBJECT_T;
     v_preguntas JSON_ARRAY_T;
@@ -668,7 +668,7 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
 
           -- Save mapping from old question ID to new question ID
           IF v_pregunta.has('id') AND NOT v_pregunta.get('id').is_null THEN
-            v_preg_id_map(v_pregunta.get_number('id')) := v_preg_id;
+            v_preg_id_map(TO_CHAR(v_pregunta.get_number('id'))) := v_preg_id;
           END IF;
 
           -- Process Options of Question
@@ -839,8 +839,8 @@ CREATE OR REPLACE PACKAGE BODY pkgln_cuestionarios AS
                   v_det_orden := NVL(v_det_calc.get_number('orden_visual'), 1);
                   
                   -- Map question ID using the mapping array
-                  IF v_preg_id_map.EXISTS(v_det_preg_id) THEN
-                    v_det_preg_id := v_preg_id_map(v_det_preg_id);
+                  IF v_preg_id_map.EXISTS(TO_CHAR(v_det_preg_id)) THEN
+                    v_det_preg_id := v_preg_id_map(TO_CHAR(v_det_preg_id));
                   END IF;
                   
                   INSERT INTO tkr_variables_calculadas_det (

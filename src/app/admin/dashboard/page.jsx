@@ -251,7 +251,8 @@ export default function Dashboard() {
                     { name: 'fecha_fin', type: 'DATE', required: false, descEs: 'Fecha y hora de finalización de la sesión. NULL si sigue en borrador.', descEn: 'End date and time of the session. NULL if still in draft.' },
                     { name: 'puntaje_total', type: 'NUMBER', required: false, descEs: 'Puntaje acumulativo total obtenido al finalizar.', descEn: 'Total cumulative score obtained upon completion.' },
                     { name: 'clasificacion_final', type: 'VARCHAR2(500)', required: false, descEs: 'Categoría final del puntaje mapeada desde TKR_RANGOS_INTERPRETACION (ej. Riesgo Severo).', descEn: 'Final score classification category mapped from TKR_RANGOS_INTERPRETACION (e.g. Severe Risk).' },
-                    { name: 'estado', type: 'NUMBER(1)', required: false, descEs: 'Estado de la sesión (0 = En proceso/Borrador, 1 = Finalizado y enviado).', descEn: 'Session state (0 = In progress/Draft, 1 = Completed and submitted).' }
+                    { name: 'estado', type: 'NUMBER(1)', required: false, descEs: 'Estado de la sesión (0 = En proceso/Borrador, 1 = Finalizado y enviado).', descEn: 'Session state (0 = In progress/Draft, 1 = Completed and submitted).' },
+                    { name: 'entrada_clob', type: 'CLOB', required: false, descEs: 'JSON completo del resultado de la evaluación (formato idéntico al de exportación).', descEn: 'Full evaluation result JSON (same format as the exported file).' }
                 ]
             },
             tkr_respuestas: {

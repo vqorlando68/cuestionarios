@@ -281,6 +281,22 @@ export function CuestionariosProvider({ children }) {
         }
     }, []);
 
+    // Save final survey response as a CLOB JSON
+    const guardarJsonRespuesta = useCallback(async (idRespuesta, exportObj) => {
+        try {
+            const res = await fetch('/api/respuestas/guardar_json', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id_cuestionario_respuesta: idRespuesta, entrada_clob: exportObj })
+            });
+            const data = await res.json();
+            return data;
+        } catch (err) {
+            console.error('Failed to save clob JSON:', err);
+            return { success: false, error: 'Connection error' };
+        }
+    }, []);
+
     // Fetch detailed answers by Response ID
     const fetchRespuestaDetalle = useCallback(async (idRespuesta) => {
         setLoading(true);
@@ -391,6 +407,7 @@ export function CuestionariosProvider({ children }) {
             iniciarRespuesta,
             guardarRespuestas,
             finalizarCuestionario,
+            guardarJsonRespuesta,
             fetchRespuestaDetalle,
             fetchDashboardStats
         }}>

@@ -9,7 +9,8 @@ export default function Responder() {
     const router = useRouter();
     const { 
         alert, user, t, language, theme, toggleTheme,
-        fetchCuestionarioDetalle, currentCuestionario, iniciarRespuesta, guardarRespuestas, finalizarCuestionario 
+        fetchCuestionarioDetalle, currentCuestionario, iniciarRespuesta, guardarRespuestas, finalizarCuestionario,
+        guardarJsonRespuesta
     } = useCuestionariosContext();
 
     const [cuestionario, setCuestionario] = useState(null);
@@ -252,6 +253,49 @@ export default function Responder() {
             // Call finalizer procedure
             const res = await finalizarCuestionario(responseId);
             if (res.success) {
+                // Construct the JSON object to save in DB (exactly matching the Export JSON format)
+                const exportObj = {
+                    cuestionario: {
+                        id: cuestionario.id,
+                        nombre: cuestionario.nombre,
+                        descripcion: cuestionario.descripcion,
+                        version: cuestionario.version
+                    },
+                    resultado: {
+                        id_respuesta: responseId,
+                        usuario: user ? user.usuario : null,
+                        fecha: new Date().toISOString(),
+                        puntaje_total: res.puntaje_total ?? null,
+                        clasificacion_final: res.clasificacion_final ?? null,
+                        color: res.color ?? null,
+                        resultados_clinicos: res.resultados_clinicos ?? null
+                    },
+                    respuestas: formatted.map(ans => {
+                        const q = allQuestions.find(curr => curr.id === ans.id_pregunta);
+                        return {
+                            id_pregunta: ans.id_pregunta,
+                            codigo_pregunta: q?.codigo || null,
+                            pregunta: q?.texto_pregunta || null,
+                            tipo: q?.tipo_codigo || null,
+                            seccion: q?.seccion_nombre || null,
+                            respuesta_texto: ans.respuesta_texto,
+                            respuesta_numero: ans.respuesta_numero,
+                            valor_obtenido: ans.valor_obtenido,
+                            opciones_seleccionadas: (ans.opciones_seleccionadas || []).map(opSel => {
+                                const originalOp = q?.opciones?.find(o => o.id === opSel.id_opcion);
+                                return {
+                                    id_opcion: opSel.id_opcion,
+                                    texto_opcion: originalOp?.texto_opcion || null,
+                                    valor_opcion: opSel.valor_obtenido
+                                };
+                            })
+                        };
+                    })
+                };
+
+                // Automatically save JSON to DB in entry_clob column
+                await guardarJsonRespuesta(responseId, exportObj);
+
                 setResultData(res);
                 setFinished(true);
             } else {

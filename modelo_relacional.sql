@@ -188,8 +188,10 @@ CREATE TABLE tkr_cuestionario_respuesta (
     fecha_fin DATE,
     puntaje_total NUMBER,
     clasificacion_final VARCHAR2(500),
-    estado NUMBER(1)
+    estado NUMBER(1),
+    entrada_clob CLOB
 );
+
 
 CREATE TABLE tkr_respuestas (
     id NUMBER PRIMARY KEY,
