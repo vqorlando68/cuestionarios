@@ -2123,7 +2123,11 @@ END;`
                     </div>
 
                     {/* Canvas Area */}
-                    <div id="canvas-scroll-container" className="flex-1 overflow-auto p-8 relative flex flex-col justify-start items-center">
+                    <div 
+                        id="canvas-scroll-container" 
+                        onClick={() => setSelectedQuestionId(null)}
+                        className="flex-1 overflow-auto p-8 relative flex flex-col justify-start items-center"
+                    >
                         <div 
                             id="canvas-scale-container"
                             style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}
@@ -2186,7 +2190,7 @@ END;`
                                             {/* Card */}
                                             <div
                                                 id={`card-${q.codigo}`}
-                                                onClick={() => setSelectedQuestionId(q.id)}
+                                                onClick={(e) => { e.stopPropagation(); setSelectedQuestionId(q.id); }}
                                                 className={`flex-1 p-5 glass-panel cursor-pointer relative border transition-all ${
                                                     isSelected
                                                         ? 'border-[#ff7a39] ring-2 ring-[#ff7a39]/20 scale-[1.01]'
@@ -2253,18 +2257,27 @@ END;`
                 </div>
 
                 {/* 3. Right Panel: Properties Panel (Conditional logic, Options, Scoring) */}
-                <div className="w-80 glass-panel border-[#b6ecff] dark:border-[#262626] p-4 flex flex-col gap-4 overflow-y-auto">
+                <div className="w-96 glass-panel border-[#b6ecff] dark:border-[#262626] p-4 flex flex-col gap-4 overflow-y-auto">
                     
                     {selQuestion ? (
                         <div className="space-y-6">
                             
                             {/* Header */}
-                            <div className="flex justify-between items-center">
-                                <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-600 dark:text-slate-400">{t('properties')}</h3>
+                            <div className="flex justify-between items-center border-b border-[#b6ecff]/10 dark:border-[#262626] pb-2 mb-2">
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setSelectedQuestionId(null); }}
+                                        className="p-1.5 rounded-lg border border-[#b6ecff]/30 dark:border-[#262626] hover:border-[#ff7a39] hover:bg-[#ff7a39]/10 text-slate-700 dark:text-slate-200 hover:text-[#ff7a39] dark:hover:text-[#ff7a39] transition-all text-xs font-bold"
+                                        title={language === 'es' ? 'Volver a Variables/Rangos' : 'Back to Variables/Ranges'}
+                                    >
+                                        ⬅️
+                                    </button>
+                                    <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-650 dark:text-slate-400">{t('properties')}</h3>
+                                </div>
                                 {!isReadOnly && (
                                     <button
                                         onClick={() => deleteQuestion(selQuestion.id)}
-                                        className="p-1 rounded bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all text-[10px] font-bold uppercase tracking-wider"
+                                        className="p-1.5 rounded bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all text-[10px] font-bold uppercase tracking-wider"
                                     >
                                         🗑️ {t('delete')}
                                     </button>
@@ -2628,7 +2641,7 @@ END;`
                                                                         ))}
                                                                     </select>
 
-                                                                    <div className="w-12">
+                                                                    <div className="w-20">
                                                                         <input
                                                                             type="number"
                                                                             value={assoc.peso}
@@ -2773,7 +2786,7 @@ END;`
                                                             value={res.descripcion || ''}
                                                             onChange={(e) => updateClinicalRange(res.id, 'descripcion', e.target.value)}
                                                             readOnly={isReadOnly}
-                                                            rows="2"
+                                                            rows="3"
                                                             className="w-full px-2 py-1 rounded bg-white/40 dark:bg-black/20 border border-[#c084fc]/20 dark:border-[#262626] text-xs text-[#04354d] dark:text-[#fafafa] resize-none"
                                                         />
                                                     </div>
