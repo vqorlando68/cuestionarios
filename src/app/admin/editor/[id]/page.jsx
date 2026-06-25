@@ -339,6 +339,8 @@ END;`
     const [dragOverIdx, setDragOverIdx] = useState(null);
     // useRef so the drag source index survives re-renders without stale closures
     const dragSrcIdxRef = useRef(null);
+    const [secDragOverIdx, setSecDragOverIdx] = useState(null);
+    const secDragSrcIdxRef = useRef(null);
     const initialCuestionarioRef = useRef(null);
 
 
@@ -870,6 +872,55 @@ END;`
     const handleDragEnd = () => {
         dragSrcIdxRef.current = null;
         setDragOverIdx(null);
+    };
+
+    // Section Drag & Drop Reorder
+    const reorderSection = (fromIdx, toIdx) => {
+        if (isReadOnly) return;
+        if (fromIdx === toIdx) return;
+        setCuestionario(prev => {
+            const secs = [...prev.secciones];
+            const [moved] = secs.splice(fromIdx, 1);
+            secs.splice(toIdx, 0, moved);
+            const updatedSecs = secs.map((sec, i) => ({ ...sec, orden_visual: i + 1 }));
+            return syncQuestionCodes({
+                ...prev,
+                secciones: updatedSecs
+            });
+        });
+    };
+
+    const handleSecDragStart = (e, idx) => {
+        if (isReadOnly) {
+            e.preventDefault();
+            return;
+        }
+        secDragSrcIdxRef.current = idx;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setDragImage(e.currentTarget.parentElement, 24, 24);
+    };
+
+    const handleSecDragOver = (e, idx) => {
+        if (isReadOnly) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setSecDragOverIdx(idx);
+    };
+
+    const handleSecDrop = (e, toIdx) => {
+        if (isReadOnly) return;
+        e.preventDefault();
+        const fromIdx = secDragSrcIdxRef.current;
+        if (fromIdx !== null && fromIdx !== toIdx) {
+            reorderSection(fromIdx, toIdx);
+        }
+        secDragSrcIdxRef.current = null;
+        setSecDragOverIdx(null);
+    };
+
+    const handleSecDragEnd = () => {
+        secDragSrcIdxRef.current = null;
+        setSecDragOverIdx(null);
     };
 
     // ------------------------------------------------------------------------
@@ -2078,31 +2129,63 @@ END;`
                                 </button>
                             )}
                         </div>
-                        <div className="space-y-1.5 flex-1 overflow-y-auto pr-1">
-                            {cuestionario.secciones.map((sec) => (
-                                <div
-                                    key={sec.id}
-                                    onClick={() => setActiveSectionId(sec.id)}
-                                    className={`w-full p-3 rounded-xl cursor-pointer border text-xs font-bold flex justify-between items-center transition-all ${
-                                        activeSectionId === sec.id
-                                            ? 'bg-[#00aae1]/10 border-[#00aae1] text-[#00aae1]'
-                                            : 'bg-white/40 dark:bg-black/10 border-[#b6ecff] dark:border-[#262626] text-slate-700 dark:text-slate-200'
-                                    }`}
-                                >
-                                    <span className="truncate max-w-[120px]">{sec.nombre}</span>
-                                    {!isReadOnly && (
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                deleteSection(sec.id);
-                                            }}
-                                            className="text-slate-400 hover:text-red-500 transition-all font-semibold"
-                                        >
-                                            🗑️
-                                        </button>
-                                    )}
-                                </div>
-                            ))}
+                        <div className="space-y-2 flex-1 overflow-y-auto pr-1">
+                            {cuestionario.secciones.map((sec, idx) => {
+                                const isActive = activeSectionId === sec.id;
+                                const isDragTarget = secDragOverIdx === idx;
+                                return (
+                                    <div
+                                        key={sec.id}
+                                        className="relative flex flex-col"
+                                        onDragOver={(e) => handleSecDragOver(e, idx)}
+                                        onDrop={(e) => handleSecDrop(e, idx)}
+                                    >
+                                        {/* Drop zone highlight indicator above the section item */}
+                                        {isDragTarget && (
+                                            <div className="w-full h-1 rounded-full bg-[#00aae1] mb-1.5 animate-pulse" />
+                                        )}
+
+                                        {/* Section row with drag handle */}
+                                        <div className="w-full flex items-stretch gap-1.5">
+                                            {/* Drag handle */}
+                                            <div
+                                                draggable={!isReadOnly}
+                                                onDragStart={(e) => handleSecDragStart(e, idx)}
+                                                onDragEnd={handleSecDragEnd}
+                                                className={`flex items-center justify-center w-6 shrink-0 rounded-lg text-slate-450 dark:text-slate-500 hover:text-[#00aae1] hover:bg-[#00aae1]/10 transition-all select-none border border-transparent hover:border-[#00aae1]/20 ${
+                                                    isReadOnly ? 'cursor-not-allowed opacity-50' : 'cursor-grab active:cursor-grabbing'
+                                                }`}
+                                                title={isReadOnly ? (language === 'es' ? 'Solo lectura' : 'Read-only') : (language === 'es' ? 'Arrastrar para reordenar' : 'Drag to reorder')}
+                                            >
+                                                <span className="text-[10px] leading-none select-none opacity-80" style={{ letterSpacing: '-1.5px' }}>⠿</span>
+                                            </div>
+
+                                            {/* Section Item clickable card */}
+                                            <div
+                                                onClick={() => setActiveSectionId(sec.id)}
+                                                className={`flex-1 p-3 rounded-xl cursor-pointer border text-xs font-bold flex justify-between items-center transition-all ${
+                                                    isActive
+                                                        ? 'bg-[#00aae1]/10 border-[#00aae1] text-[#00aae1]'
+                                                        : 'bg-white/40 dark:bg-black/10 border-[#b6ecff] dark:border-[#262626] text-slate-700 dark:text-slate-200 hover:border-[#00aae1]'
+                                                }`}
+                                            >
+                                                <span className="truncate max-w-[120px]">{sec.nombre}</span>
+                                                {!isReadOnly && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            deleteSection(sec.id);
+                                                        }}
+                                                        className="text-slate-400 hover:text-red-500 transition-all font-semibold"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
@@ -2143,7 +2226,7 @@ END;`
                         <div 
                             id="canvas-scale-container"
                             style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}
-                            className="transition-all duration-200 ease-out space-y-6 w-full max-w-lg relative"
+                            className="transition-all duration-200 ease-out space-y-6 w-[460px] relative"
                         >
                             {/* Section header edit in canvas */}
                             {activeSection && (
@@ -2222,7 +2305,7 @@ END;`
                                                         {q.obligatoria === 1 ? `* ${t('required')}` : ''}
                                                     </span>
                                                 </div>
-                                                <p className="text-sm font-semibold text-white dark:text-[#fafafa] truncate">
+                                                <p className="text-sm font-semibold text-white dark:text-[#fafafa] whitespace-normal break-words leading-relaxed">
                                                     {q.texto_pregunta || `Pregunta ${idx + 1}`}
                                                 </p>
                                             </div>
