@@ -28,7 +28,11 @@ export async function POST(request) {
         return NextResponse.json(data);
     } catch (error) {
         console.error('Error saving questionnaire:', error);
-        return NextResponse.json({ success: false, error: error.message || 'Database error' }, { status: 500 });
+        let errorMsg = error.message || 'Database error';
+        if (errorMsg.includes('FK_TKR_VC_DET_PREGUNTA') || errorMsg.includes('ORA-02291')) {
+            errorMsg = 'Error de integridad: Una dimensión o variable clínica hace referencia a una pregunta que fue eliminada o no existe en el cuestionario. Por favor, revise la configuración de variables clínicas.';
+        }
+        return NextResponse.json({ success: false, error: errorMsg }, { status: 500 });
     }
 }
 

@@ -41,6 +41,12 @@ export default function Dashboard() {
     const [activeDevTab, setActiveDevTab] = useState('tkr_cuestionarios');
     const [copiedId, setCopiedId] = useState(null);
 
+    // Import JSON states
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [importedCuestionario, setImportedCuestionario] = useState(null);
+    const [importing, setImporting] = useState(false);
+    const [importError, setImportError] = useState('');
+
     // Dashboard database tables and queries documentation
     const dashboardDocs = useMemo(() => {
         return {
@@ -851,6 +857,90 @@ WHERE id_cuestionario = :id_cuestionario AND estado = 1;`
         }
     };
 
+    // Handle JSON file selection and validation
+    const handleImportJson = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const json = JSON.parse(event.target.result);
+                if (!json || typeof json !== 'object' || !json.nombre) {
+                    await alert(language === 'es' 
+                        ? 'El archivo no contiene un cuestionario válido (debe tener un nombre)' 
+                        : 'The file does not contain a valid questionnaire (must have a name)');
+                    return;
+                }
+
+                // Check sections structure if present
+                if (json.secciones && !Array.isArray(json.secciones)) {
+                    await alert(language === 'es'
+                        ? 'La estructura de secciones no es válida'
+                        : 'Sections structure is invalid');
+                    return;
+                }
+
+                setImportError('');
+                setImportedCuestionario(json);
+
+                if (json.id) {
+                    setShowImportModal(true);
+                } else {
+                    // If no ID, import immediately as new questionnaire
+                    const confirmImport = await confirm(language === 'es'
+                        ? `¿Desea importar el cuestionario "${json.nombre}" como un nuevo cuestionario?`
+                        : `Do you want to import the questionnaire "${json.nombre}" as a new questionnaire?`);
+                    if (confirmImport) {
+                        await executeImport(json, false);
+                    }
+                }
+            } catch (err) {
+                console.error('Error parsing JSON:', err);
+                await alert(language === 'es'
+                    ? 'Error al leer el archivo JSON: ' + err.message
+                    : 'Error reading JSON file: ' + err.message);
+            }
+        };
+        reader.readAsText(file);
+        // Reset file input value so same file can be imported again
+        e.target.value = '';
+    };
+
+    // Execute import API call
+    const executeImport = async (cuestionarioData, usarMismoId) => {
+        setImporting(true);
+        setImportError('');
+        try {
+            const res = await fetch('/api/cuestionarios/importar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    cuestionario: cuestionarioData,
+                    usarMismoId: usarMismoId
+                })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                await alert(language === 'es'
+                    ? `¡Cuestionario "${cuestionarioData.nombre}" importado exitosamente con el ID ${data.id}!`
+                    : `Questionnaire "${cuestionarioData.nombre}" imported successfully with ID ${data.id}!`);
+                setShowImportModal(false);
+                setImportedCuestionario(null);
+                // Refresh list and statistics
+                await loadData();
+            } else {
+                setImportError(data.error || (language === 'es' ? 'Error al importar' : 'Error importing'));
+            }
+        } catch (err) {
+            console.error('Failed to import questionnaire:', err);
+            setImportError(language === 'es' ? 'Error de conexión. Intente de nuevo.' : 'Connection error. Try again.');
+        } finally {
+            setImporting(false);
+        }
+    };
+
     if (!initialized || !user) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-[#effaff] dark:bg-[#121212]">
@@ -1050,12 +1140,27 @@ WHERE id_cuestionario = :id_cuestionario AND estado = 1;`
                                 </p>
                             </div>
 
-                            <button
-                                onClick={() => setShowCreateModal(true)}
-                                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#ff7a39] to-[#ff5a1f] hover:from-[#e06020] hover:to-[#e04a14] text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-orange-500/10 flex items-center gap-1.5 active:scale-[0.98] transition-all"
-                            >
-                                ➕ {t('create')}
-                            </button>
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="file"
+                                    id="import-json-file"
+                                    accept=".json"
+                                    className="hidden"
+                                    onChange={handleImportJson}
+                                />
+                                <button
+                                    onClick={() => document.getElementById('import-json-file').click()}
+                                    className="px-4 py-2.5 rounded-xl border border-[#b6ecff] dark:border-[#262626] text-slate-700 dark:text-slate-200 hover:border-[#ff7a39] hover:bg-[#ff7a39]/10 font-bold text-xs uppercase tracking-wider shadow-sm flex items-center gap-1.5 active:scale-[0.98] transition-all bg-white/5"
+                                >
+                                    📥 {language === 'es' ? 'Importar JSON' : 'Import JSON'}
+                                </button>
+                                <button
+                                    onClick={() => setShowCreateModal(true)}
+                                    className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#ff7a39] to-[#ff5a1f] hover:from-[#e06020] hover:to-[#e04a14] text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-orange-500/10 flex items-center gap-1.5 active:scale-[0.98] transition-all"
+                                >
+                                    ➕ {t('create')}
+                                </button>
+                            </div>
                         </div>
 
                         {/* List / Table */}
@@ -1063,6 +1168,7 @@ WHERE id_cuestionario = :id_cuestionario AND estado = 1;`
                             <table className="min-w-full divide-y divide-[#b6ecff]/30 dark:divide-[#262626]">
                                 <thead>
                                     <tr className="text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                        <th className="py-3 px-4 w-16 text-center">ID</th>
                                         <th className="py-3 px-4">{t('name')}</th>
                                         <th className="py-3 px-4 text-center">{language === 'es' ? 'Tipo' : 'Type'}</th>
                                         <th className="py-3 px-4 text-center">{t('version')}</th>
@@ -1074,19 +1180,22 @@ WHERE id_cuestionario = :id_cuestionario AND estado = 1;`
                                 <tbody className="divide-y divide-[#b6ecff]/10 dark:divide-[#262626]/50 text-sm font-medium text-white dark:text-[#fafafa]">
                                     {loadingStats ? (
                                         <tr>
-                                            <td colSpan="5" className="py-8 text-center text-slate-400 font-bold uppercase tracking-wider">
+                                            <td colSpan="7" className="py-8 text-center text-slate-400 font-bold uppercase tracking-wider">
                                                 {t('loading')}
                                             </td>
                                         </tr>
                                     ) : breakdown.length === 0 ? (
                                         <tr>
-                                            <td colSpan="5" className="py-8 text-center text-slate-400 font-bold uppercase tracking-wider">
+                                            <td colSpan="7" className="py-8 text-center text-slate-400 font-bold uppercase tracking-wider">
                                                 {language === 'es' ? 'No hay cuestionarios activos' : 'No active questionnaires'}
                                             </td>
                                         </tr>
                                     ) : (
                                         breakdown.map((item) => (
                                             <tr key={item.id} className="hover:bg-slate-200/20 dark:hover:bg-white/5 transition-all">
+                                                <td className="py-3.5 px-4 text-xs font-mono font-bold text-slate-400 text-center">
+                                                    #{item.id}
+                                                </td>
                                                 <td className="py-3.5 px-4">
                                                     <span className="font-semibold text-white dark:text-[#fafafa]">{item.nombre}</span>
                                                 </td>
@@ -1368,6 +1477,121 @@ WHERE id_cuestionario = :id_cuestionario AND estado = 1;`
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Import Questionnaire */}
+            {showImportModal && importedCuestionario && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+                    <div className="w-full max-w-md glass-panel p-6 border-[#00aae1]/30 dark:border-[#06b6d4]/30 space-y-6 shadow-2xl bg-[#effaff]/98 dark:bg-[#071724]/98">
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-[#04354d] dark:text-[#fafafa]">
+                                {language === 'es' ? 'Importar Cuestionario' : 'Import Questionnaire'}
+                            </h3>
+                            <button
+                                onClick={() => {
+                                    setShowImportModal(false);
+                                    setImportedCuestionario(null);
+                                    setImportError('');
+                                }}
+                                className="text-slate-650 dark:text-slate-400 hover:text-red-500 text-lg font-semibold transition-all"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {importError && (
+                            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-semibold text-center">
+                                {importError}
+                            </div>
+                        )}
+
+                        <div className="space-y-4">
+                            <div className="p-4 rounded-xl bg-white/30 dark:bg-[#05141e]/30 border border-[#b6ecff] dark:border-[#06b6d4]/20 space-y-2 text-sm text-[#04354d] dark:text-[#fafafa]">
+                                <div>
+                                    <strong className="text-slate-500 dark:text-slate-400">{language === 'es' ? 'Nombre: ' : 'Name: '}</strong>
+                                    {importedCuestionario.nombre}
+                                </div>
+                                {importedCuestionario.descripcion && (
+                                    <div>
+                                        <strong className="text-slate-500 dark:text-slate-400">{language === 'es' ? 'Descripción: ' : 'Description: '}</strong>
+                                        {importedCuestionario.descripcion}
+                                    </div>
+                                )}
+                                <div>
+                                    <strong className="text-slate-500 dark:text-slate-400">{language === 'es' ? 'ID en Archivo: ' : 'ID in File: '}</strong>
+                                    <span className="font-mono bg-white/20 dark:bg-black/20 px-1.5 py-0.5 rounded text-xs font-bold text-[#ff7a39]">
+                                        {importedCuestionario.id}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <p className="text-xs text-slate-505 dark:text-slate-400 leading-relaxed font-medium">
+                                {language === 'es' 
+                                    ? '¿Cómo desea importar este cuestionario? Seleccione una opción:' 
+                                    : 'How do you want to import this questionnaire? Select an option:'}
+                            </p>
+
+                            <div className="flex flex-col gap-3">
+                                <button
+                                    onClick={() => executeImport(importedCuestionario, false)}
+                                    disabled={importing}
+                                    className="w-full p-3 rounded-xl border border-[#b6ecff] dark:border-[#262626] hover:border-[#ff7a39] hover:bg-[#ff7a39]/10 text-left transition-all group flex items-start gap-3 bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <span className="text-lg">✨</span>
+                                    <div>
+                                        <div className="text-xs font-bold uppercase tracking-wider text-[#ff7a39]">
+                                            {language === 'es' ? 'Crear con Nuevo ID' : 'Create with New ID'}
+                                        </div>
+                                        <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-normal">
+                                            {language === 'es' 
+                                                ? 'Se generará un ID automático y no afectará ningún cuestionario existente.' 
+                                                : 'An automatic ID will be generated, and it will not affect any existing questionnaire.'}
+                                        </div>
+                                    </div>
+                                </button>
+
+                                <button
+                                    onClick={() => executeImport(importedCuestionario, true)}
+                                    disabled={importing}
+                                    className="w-full p-3 rounded-xl border border-red-500/20 dark:border-red-950/20 hover:border-red-500 hover:bg-red-500/10 text-left transition-all group flex items-start gap-3 bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <span className="text-lg">⚠️</span>
+                                    <div>
+                                        <div className="text-xs font-bold uppercase tracking-wider text-red-600 dark:text-red-400">
+                                            {language === 'es' ? 'Utilizar ID del Archivo' : 'Use ID from File'}
+                                        </div>
+                                        <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-normal">
+                                            {language === 'es' 
+                                                ? `Utilizará el ID ${importedCuestionario.id}. Si ya existe ese ID, SE BORRARÁ todo el cuestionario anterior y sus relaciones/respuestas.` 
+                                                : `Will use ID ${importedCuestionario.id}. If that ID already exists, the previous questionnaire and its relations/answers WILL BE DELETED.`}
+                                        </div>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+
+                        {importing && (
+                            <div className="flex items-center justify-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 animate-pulse">
+                                <div className="w-4 h-4 border-2 border-[#ff7a39] border-t-transparent rounded-full animate-spin"></div>
+                                {language === 'es' ? 'IMPORTANDO CONFIGURACIÓN...' : 'IMPORTING CONFIGURATION...'}
+                            </div>
+                        )}
+
+                        <div className="flex gap-2 justify-end pt-2">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowImportModal(false);
+                                    setImportedCuestionario(null);
+                                    setImportError('');
+                                }}
+                                className="px-4 py-2 rounded-lg border border-[#b6ecff] dark:border-[#06b6d4]/20 hover:border-red-500 hover:text-red-500 text-slate-700 dark:text-slate-200 text-xs font-bold uppercase transition-all"
+                            >
+                                {t('cancel')}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

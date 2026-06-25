@@ -576,6 +576,25 @@ END;`
             }
         }
 
+        // 7. Clinical variables mapped questions validation (existing questions check)
+        if (cuestionario.id_tipo_cuestionario === 2 && cuestionario.variables) {
+            cuestionario.variables.forEach(v => {
+                (v.preguntas_asociadas || []).forEach(assoc => {
+                    if (assoc.id_pregunta) {
+                        const exists = allQuestions.some(q => q.id === assoc.id_pregunta);
+                        if (!exists) {
+                            validationErrors.push({
+                                type: 'error',
+                                message: language === 'es'
+                                    ? `La variable/dimensión clínica "${v.nombre}" hace referencia a una pregunta eliminada (ID: ${assoc.id_pregunta}). Por favor, elimínela desde la configuración de variables.`
+                                    : `Clinical dimension "${v.nombre}" references a deleted question (ID: ${assoc.id_pregunta}). Please remove it under the Variables config.`
+                            });
+                        }
+                    }
+                });
+            });
+        }
+
         return validationErrors;
     }, [cuestionario, language]);
 
@@ -604,9 +623,26 @@ END;`
 
         if (res.success) {
             await alert(language === 'es' ? '¡Guardado exitosamente!' : 'Saved successfully!');
-            router.push('/admin/dashboard');
+            initialCuestionarioRef.current = JSON.stringify(cuestionario);
         } else {
             await alert(language === 'es' ? 'Error al guardar: ' + res.error : 'Save failed: ' + res.error);
+        }
+    };
+
+    // Export configuration to JSON file
+    const handleExport = () => {
+        if (!cuestionario) return;
+        try {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(cuestionario, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `cuestionario_${cuestionario.id || 'config'}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        } catch (err) {
+            console.error('Error exporting questionnaire:', err);
+            alert(language === 'es' ? 'Error al exportar: ' + err.message : 'Export failed: ' + err.message);
         }
     };
 
@@ -1977,6 +2013,8 @@ END;`
                                 placeholder={language === 'es' ? 'Nombre del cuestionario' : 'Questionnaire name'}
                             />
                             <div className="flex items-center gap-3 text-xs text-slate-400 font-semibold uppercase px-1.5">
+                                <span className="font-mono text-[#ff7a39] font-bold">ID: {cuestionario.id}</span>
+                                <span>•</span>
                                 <span>{t('version')}: {cuestionario.version}</span>
                                 <span>•</span>
                                 <span>{cuestionario.id_tipo_cuestionario === 2 ? (language === 'es' ? 'Salud Mental' : 'Mental Health') : (language === 'es' ? 'General' : 'General')}</span>
@@ -2034,6 +2072,14 @@ END;`
                         className="px-3 py-1.5 rounded-lg border border-[#b6ecff] dark:border-[#262626] text-xs font-semibold hover:border-[#ff7a39] hover:bg-[#ff7a39]/10 text-slate-700 dark:text-slate-200 hover:text-[#ff7a39] dark:hover:text-[#ff7a39] transition-all"
                     >
                         {theme === 'light' ? '🌙' : '☀️'}
+                    </button>
+
+                    <button
+                        onClick={handleExport}
+                        className="px-3 py-1.5 rounded-lg border border-[#b6ecff] dark:border-[#262626] text-xs font-semibold hover:border-[#ff7a39] hover:bg-[#ff7a39]/10 text-slate-700 dark:text-slate-200 hover:text-[#ff7a39] dark:hover:text-[#ff7a39] transition-all flex items-center gap-1.5 bg-white/5"
+                        title={language === 'es' ? 'Exportar Configuración (JSON)' : 'Export Configuration (JSON)'}
+                    >
+                        📤 {language === 'es' ? 'Exportar' : 'Export'}
                     </button>
 
                     <button
