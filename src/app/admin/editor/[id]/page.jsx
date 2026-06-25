@@ -521,16 +521,6 @@ END;`
         };
         dfsReach(entryPoint);
 
-        const orphans = allQuestions.filter(q => !reached[q.codigo]);
-        if (orphans.length > 0) {
-            validationErrors.push({
-                type: 'warning',
-                message: language === 'es'
-                    ? `Preguntas inalcanzables (huérfanas): ${orphans.map(q => q.codigo).join(', ')}`
-                    : `Unreachable (orphan) questions: ${orphans.map(q => q.codigo).join(', ')}`
-            });
-        }
-
         // 5. Empty check validations
         allQuestions.forEach(q => {
             if (q.tipo_codigo === 'UNICA' || q.tipo_codigo === 'MULTIPLE') {
@@ -2647,21 +2637,24 @@ END;`
                                                         </div>
 
                                                         <div className="space-y-2">
-                                                            {(v.preguntas_asociadas || []).map((assoc) => (
-                                                                <div key={assoc.id} className="flex items-center gap-1.5 bg-white/60 dark:bg-slate-900/40 p-1.5 rounded-lg border border-[#c084fc]/10 dark:border-slate-800">
-                                                                    <select
-                                                                        value={assoc.id_pregunta || ''}
-                                                                        onChange={(e) => updateClinicalVariableQuestion(v.id, assoc.id, 'id_pregunta', parseInt(e.target.value) || '')}
-                                                                        disabled={isReadOnly}
-                                                                        className="flex-1 px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-[#c084fc]/20 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#c084fc] transition-all"
-                                                                    >
-                                                                        <option value="" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">-- {language === 'es' ? 'Pregunta' : 'Question'} --</option>
-                                                                        {allQuestionsList.map(q => (
-                                                                            <option key={q.id} value={q.id} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
-                                                                                {q.codigo} ({q.texto_pregunta.slice(0, 20)}...)
-                                                                            </option>
-                                                                        ))}
-                                                                    </select>
+                                                            {(v.preguntas_asociadas || []).map((assoc) => {
+                                                                const selectedQ = allQuestionsList.find(q => q.id === assoc.id_pregunta);
+                                                                return (
+                                                                    <div key={assoc.id} className="flex items-center gap-1.5 bg-white/60 dark:bg-slate-900/40 p-1.5 rounded-lg border border-[#c084fc]/10 dark:border-slate-800" title={selectedQ ? selectedQ.texto_pregunta : (language === 'es' ? 'Seleccionar Pregunta' : 'Select Question')}>
+                                                                        <select
+                                                                            value={assoc.id_pregunta || ''}
+                                                                            onChange={(e) => updateClinicalVariableQuestion(v.id, assoc.id, 'id_pregunta', parseInt(e.target.value) || '')}
+                                                                            disabled={isReadOnly}
+                                                                            className="flex-1 min-w-0 truncate px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-[#c084fc]/20 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#c084fc] transition-all"
+                                                                            title={selectedQ ? selectedQ.texto_pregunta : (language === 'es' ? 'Seleccionar Pregunta' : 'Select Question')}
+                                                                        >
+                                                                            <option value="" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">-- {language === 'es' ? 'Pregunta' : 'Question'} --</option>
+                                                                            {allQuestionsList.map(q => (
+                                                                                <option key={q.id} value={q.id} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100" title={q.texto_pregunta}>
+                                                                                    {q.codigo} - {q.texto_pregunta}
+                                                                                </option>
+                                                                            ))}
+                                                                        </select>
 
                                                                     <div className="w-20">
                                                                         <input
@@ -2684,7 +2677,8 @@ END;`
                                                                         </button>
                                                                     )}
                                                                 </div>
-                                                            ))}
+                                                            );
+                                                            })}
                                                         </div>
                                                     </div>
                                                 </div>
